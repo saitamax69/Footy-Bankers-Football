@@ -1,245 +1,196 @@
 import os
-import json
-import random
+import requests
 from datetime import datetime
-import pytz
-from groq import Groq
 
 
-VOICE_SYSTEM = """
-You write social media content for Footy Bankers Football.
-
-The voice is a passionate, knowledgeable football fan.
-British. Mid-twenties to thirties.
-Watches almost every game.
-Has been following football his whole life.
-Honest. Opinionated. Data-aware.
-
-RULES:
-- Write like texting a mate about football
-- Short punchy sentences. Mix with longer ones.
-- Use contractions always (cannot, I am, we are)
-- Never show raw numbers as stats
-  Wrong: "win rate 78%"
-  Right: "eight wins from their last ten"
-- Express actual opinions not just data
-- Admit uncertainty when confidence is under 65
-- Reference yesterday's results naturally
-- Vary your language every day
-- Never sound like a press release
-- Never sound like a robot
-
-PHRASES TO USE NATURALLY:
-"cannot see past this one"
-"this writes itself"
-"been saying this for weeks"
-"backing this all day"
-"something feels off about this game"
-"trust the process"
-"this one really jumps out"
-"not fully sold but the value is there"
-"form says one thing, gut says another"
-"both sides have been leaking goals"
-"solid as a rock at home"
-"""
-
-
-class PersonalityEngine:
+class FacebookPoster:
     """
-    Adds human voice to all content.
-    References yesterday.
-    Varies style daily.
+    Posts to Facebook Page.
+    Uses Graph API v18.0.
+    Handles token expiry warnings.
+    Includes detailed error reporting.
     """
+
+    GRAPH           = "https://graph.facebook.com/v18.0"
+    TOKEN_WARN_DAYS = 7
 
     def __init__(self):
-        self.client = Groq(
-            api_key=os.environ.get("GROQ_API_KEY", "")
+        self.token      = os.environ.get(
+            "FACEBOOK_PAGE_TOKEN", ""
         )
-        self.model = "llama-3.1-70b-versatile"
-        self.tz = pytz.timezone("Europe/London")
-
-    def write_opening(
-        self,
-        accuracy_data: dict,
-        day_name: str,
-    ) -> str:
-        """
-        Write the human opening paragraph
-        for today's predictions post.
-        """
-        yesterday = accuracy_data.get(
-            "yesterday", {}
+        self.page_id    = os.environ.get(
+            "FACEBOOK_PAGE_ID", ""
         )
-        streak = accuracy_data.get("streak", 0)
-        overall = accuracy_data.get("overall", "")
+        self.token_date = os.environ.get(
+            "FACEBOOK_TOKEN_DATE", ""
+        )
 
-        prompt = f"""
-{VOICE_SYSTEM}
+    def post(self, text: str) -> bool:
+        """Post text message to Facebook page."""
 
-Write the opening paragraph for today's 
-football predictions post.
+        if not self.token:
+            print("❌ Facebook: No token configured")
+            return False
 
-Context:
-- Today is {day_name}
-- Yesterday: {yesterday.get('correct', '?')} correct 
-  from {yesterday.get('total', '?')} picks
-- Current streak: {streak} correct in a row
-- Overall accuracy: {overall}
-
-Write 2-4 short sentences max.
-Reference yesterday naturally.
-Build excitement for today.
-Sound completely human.
-No emojis in this section.
-No markdown.
-Just natural text.
-
-Example style:
-"Right. Tuesday. Four from five yesterday 
-which I am happy with. The Chelsea pick 
-let me down but City came in exactly 
-as expected. Fresh day today. Here is 
-what I am looking at."
-"""
+        if not self.page_id:
+            print("❌ Facebook: No page ID configured")
+            return False
 
         try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.8,
-                max_tokens=150,
+            r = requests.post(
+                f"{self.GRAPH}/{self.page_id}/feed",
+                data={
+                    "message":      text,
+                    "access_token": self.token,
+                },
+                timeout=30,
             )
-            return resp.choices[0].message.content.strip()
+
+            if r.status_code == 200:
+                pid = r.json().get("id", "unknown")
+                print(
+                    f"✅ Facebook: Posted successfully "
+                    f"(id: {pid})"
+                )
+                return True
+
+            else:
+                error  = r.json().get("error", {})
+                code   = error.get("code", "?")
+                msg    = error.get("message", r.text[:200])
+                subcode = error.get("error_subcode", "")
+
+                print(f"❌ Facebook post failed:")
+                print(f"   Code: {code}")
+                print(f"   Message: {msg}")
+
+                if code == 200 or code == 190:
+                    print(
+                        "   FIX: Token needs refreshing."
+                        " Go to developers.facebook.com"
+                        " and generate new page token."
+                    )
+                elif code == 100:
+                    print(
+                        "   FIX: Permission missing."
+                        " Token needs pages_manage_posts"
+                        " permission."
+                    )
+                elif code == 368:
+                    print(
+                        "   FIX: Account temporarily"
+                        " restricted."
+                    )
+
+                return False
+
+        except requests.Timeout:
+            print("❌ Facebook: Request timed out")
+            return False
         except Exception as e:
-            print(f"Opening write failed: {e}")
-            return self._fallback_opening(
-                yesterday, streak, day_name
+            print(f"❌ Facebook error: {e}")
+            return False
+
+    def test_connection(self) -> bool:
+        """Test page connection without posting."""
+        try:
+            r = requests.get(
+                f"{self.GRAPH}/{self.page_id}",
+                params={
+                    "fields":       "name,fan_count,category",
+                    "access_token": self.token,
+                },
+                timeout=15,
             )
 
-    def write_pick_analysis(
-        self, prediction: dict
-    ) -> str:
+            if r.status_code == 200:
+                data = r.json()
+                print(
+                    f"✅ Facebook connected: "
+                    f"{data.get('name')}"
+                )
+                print(
+                    f"   Followers: "
+                    f"{data.get('fan_count', 0):,}"
+                )
+                return True
+            else:
+                err = r.json().get("error", {})
+                print(
+                    f"❌ Facebook connection failed: "
+                    f"{err.get('message', 'unknown')}"
+                )
+                return False
+
+        except Exception as e:
+            print(f"❌ Facebook connection error: {e}")
+            return False
+
+    def validate_token(self) -> dict:
         """
-        Convert raw AI prediction into
-        human-voice analysis text.
+        Check token validity and permissions.
+        Returns dict with status info.
         """
-        m = prediction.get("match_data", {})
-        home = m.get("home_team", "Home")
-        away = m.get("away_team", "Away")
-        pick = prediction.get("pick_short", "")
-        conf = prediction.get("confidence", 0)
-        reasons = prediction.get("reasoning", [])
-        risk = prediction.get("risk", "")
-        hf = m.get("home_form", {})
-        af = m.get("away_form", {})
-
-        prompt = f"""
-{VOICE_SYSTEM}
-
-Write a short human-voice analysis 
-for this football prediction.
-
-Match: {home} vs {away}
-Our pick: {pick}
-Confidence: {conf}%
-AI reasons: {reasons}
-Main risk: {risk}
-Home form: {hf.get('form_string', '?')}
-Away form: {af.get('form_string', '?')}
-Home win rate: {hf.get('win_rate', '?')}%
-Away win rate: {af.get('win_rate', '?')}%
-
-Write 2-3 sentences maximum.
-Sound like a real football fan.
-Mention the most important factor.
-If confidence under 65 admit some uncertainty.
-No emojis. No markdown. Pure text.
-"""
+        result = {
+            "valid":       False,
+            "expires_in":  -1,
+            "permissions": [],
+            "error":       "",
+        }
 
         try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=120,
+            r = requests.get(
+                f"{self.GRAPH}/debug_token",
+                params={
+                    "input_token":  self.token,
+                    "access_token": self.token,
+                },
+                timeout=15,
             )
-            return resp.choices[0].message.content.strip()
+
+            if r.status_code == 200:
+                data    = r.json().get("data", {})
+                is_valid = data.get("is_valid", False)
+                expires  = data.get("expires_at", 0)
+                scopes   = data.get("scopes", [])
+
+                result["valid"]       = is_valid
+                result["permissions"] = scopes
+
+                if expires and expires > 0:
+                    exp_dt = datetime.fromtimestamp(expires)
+                    days   = (exp_dt - datetime.now()).days
+                    result["expires_in"] = days
+                else:
+                    result["expires_in"] = 999
+
+            return result
+
+        except Exception as e:
+            result["error"] = str(e)
+            return result
+
+    def days_until_expiry(self) -> int:
+        """Estimate days until token expires."""
+        if not self.token_date:
+            return -1
+        try:
+            created  = datetime.fromisoformat(self.token_date)
+            now      = datetime.now()
+            age_days = (now - created).days
+            return max(0, 60 - age_days)
         except Exception:
-            return self._fallback_analysis(
-                reasons, risk
-            )
+            return -1
 
-    def write_media_post(
-        self,
-        post_type: str,
-        context: dict,
-        used_topics: list = None,
-    ) -> str:
-        """
-        Generate media-company style post.
-        post_type: data_tuesday, hot_take,
-                   throwback, weekend_preview, etc.
-        """
-        avoid_topics = used_topics or []
-
-        prompt = f"""
-{VOICE_SYSTEM}
-
-Write a {post_type} post for Footy Bankers Football.
-
-Context: {json.dumps(context)}
-Do not repeat these topics: {avoid_topics}
-
-Post types:
-- data_tuesday: Share one surprising football stat
-- hot_take: Bold opinion backed by logic
-- throwback: Historical football moment
-- weekend_preview: Hype for weekend fixtures
-- monday_verdict: Honest weekend review
-- player_spotlight: Unsung hero feature
-
-Write the full post.
-Sound human and genuine.
-Mix short and long sentences.
-End with something that invites engagement.
-No fake positivity.
-Max 200 words.
-"""
-
-        try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.9,
-                max_tokens=300,
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"Media post failed: {e}")
+    def token_warning(self) -> str:
+        """Return warning if token expires soon."""
+        days = self.days_until_expiry()
+        if days == -1:
             return ""
-
-    def _fallback_opening(
-        self, yesterday: dict, streak: int, day: str
-    ) -> str:
-        correct = yesterday.get("correct", 0)
-        total = yesterday.get("total", 0)
-        options = [
-            f"Right. {day}. Let's get into it.",
-            f"{day} picks are in. Here's what I like today.",
-            f"Morning. {correct} from {total} yesterday. "
-            f"Moving on. Here's today.",
-        ]
-        return random.choice(options)
-
-    def _fallback_analysis(
-        self, reasons: list, risk: str
-    ) -> str:
-        if reasons:
-            return reasons[0]
-        return "The data points clearly in one direction here."
+        if days <= self.TOKEN_WARN_DAYS:
+            return (
+                f"⚠️ Facebook token expires in {days} "
+                f"days. Please refresh at: "
+                f"developers.facebook.com"
+            )
+        return ""
