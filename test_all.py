@@ -1,5 +1,19 @@
 """
 FOOTY BANKERS FOOTBALL
+Complete System Test
+"""
+
+import os
+import sys
+
+# Print immediately so we know script started
+print("Starting Footy Bankers Football Tests...")
+print(f"Python: {sys.version}")
+print(f"Working directory: {os.getcwd()}")
+print(f"Files: {os.listdir('.')}")
+print("")
+"""
+FOOTY BANKERS FOOTBALL
 Complete System Test - Final Version
 
 Includes SportDB API test.
