@@ -3,62 +3,44 @@ from datetime import datetime
 import pytz
 
 from src.data.football_data import FootballDataOrg
-from src.data.api_football import ApiFootball
+from src.data.sportdb_api import SportDBApi
 from src.data.sports_db import TheSportsDB
 from src.data.news import NewsCollector
 from src.data.weather import WeatherChecker
-from src.data.team_names import match_names
 
 
 class DataCollector:
     """
     Master data collector.
-    Merges all sources.
-    Deduplicates.
-    Enriches with form, news, weather.
+
+    Priority order:
+    1. football-data.org (top leagues, best quality)
+    2. SportDB/Flashscore (every league on earth)
+    3. TheSportsDB (free backup)
+
+    Deduplicates, enriches, returns clean list.
     """
 
     def __init__(self):
-        self.fd   = FootballDataOrg()
-        self.af   = ApiFootball()
-        self.sdb  = TheSportsDB()
-        self.news = NewsCollector()
-        self.wx   = WeatherChecker()
-        self.tz   = pytz.timezone("Europe/London")
+        self.fd      = FootballDataOrg()
+        self.sportdb = SportDBApi()
+        self.sdb     = TheSportsDB()
+        self.news    = NewsCollector()
+        self.wx      = WeatherChecker()
+        self.tz      = pytz.timezone("Europe/London")
 
     def get_todays_matches(self) -> list:
-        """
-        Collect from all sources.
-        Deduplicate by normalised team names.
-        Return enriched match list.
-        """
-        print("\n📡 Collecting matches from all sources...")
-        seen = set()
+        print(
+            "\n📡 Collecting from all data sources..."
+        )
+        seen        = set()
         all_matches = []
 
-        # Source 1: football-data.org (primary)
+        # Source 1: football-data.org
         try:
-            fd_matches = self.fd.get_todays_matches()
-            for m in fd_matches:
-                key = (
-                    m["home_team_norm"],
-                    m["away_team_norm"],
-                )
-                if key not in seen:
-                    seen.add(key)
-                    all_matches.append(m)
-            print(
-                f"   ✅ football-data.org: "
-                f"{len(fd_matches)} matches"
-            )
-        except Exception as e:
-            print(f"   ❌ football-data.org: {e}")
-
-        # Source 2: API-Football (extra leagues)
-        try:
-            af_matches = self.af.get_todays_matches()
-            added = 0
-            for m in af_matches:
+            matches = self.fd.get_todays_matches()
+            added   = 0
+            for m in matches:
                 key = (
                     m["home_team_norm"],
                     m["away_team_norm"],
@@ -68,21 +50,48 @@ class DataCollector:
                     all_matches.append(m)
                     added += 1
             print(
-                f"   ✅ API-Football: +{added} new"
+                f"   ✅ football-data.org: "
+                f"{added} matches"
             )
         except Exception as e:
-            print(f"   ❌ API-Football: {e}")
+            print(f"   ❌ football-data.org: {e}")
 
-        # Source 3: TheSportsDB (gap filler)
+        # Source 2: SportDB / Flashscore
         try:
-            sdb_matches = self.sdb.get_todays_matches()
-            added = 0
-            for m in sdb_matches:
-                key = (
-                    m["home_team_norm"],
-                    m["away_team_norm"],
+            if self.sportdb.api_key:
+                matches = \
+                    self.sportdb.get_todays_matches()
+                added = 0
+                for m in matches:
+                    key = (
+                        m.get("home_team_norm", ""),
+                        m.get("away_team_norm", ""),
+                    )
+                    if key[0] and key not in seen:
+                        seen.add(key)
+                        all_matches.append(m)
+                        added += 1
+                print(
+                    f"   ✅ SportDB/Flashscore: "
+                    f"+{added} new"
                 )
-                if key not in seen:
+            else:
+                print("   ⚠️  SportDB: No key set")
+        except Exception as e:
+            print(f"   ❌ SportDB: {e}")
+
+        # Source 3: TheSportsDB (free backup)
+        try:
+            matches = self.sdb.get_todays_matches()
+            added   = 0
+            for m in matches:
+                if not m.get("home_team"):
+                    continue
+                key = (
+                    m.get("home_team_norm", ""),
+                    m.get("away_team_norm", ""),
+                )
+                if key[0] and key not in seen:
                     seen.add(key)
                     all_matches.append(m)
                     added += 1
@@ -92,59 +101,62 @@ class DataCollector:
         except Exception as e:
             print(f"   ❌ TheSportsDB: {e}")
 
-        print(
-            f"\n   Total unique matches: {len(all_matches)}"
-        )
+        total = len(all_matches)
+        print(f"\n   Total unique matches: {total}")
 
         if not all_matches:
             return []
 
         return self._enrich(all_matches)
 
+    def get_live_scores(self) -> list:
+        """Live scores for result checking."""
+        try:
+            if self.sportdb.api_key:
+                live = self.sportdb.get_live_scores()
+                if live:
+                    return live
+        except Exception as e:
+            print(f"Live scores error: {e}")
+        return []
+
     def _enrich(self, matches: list) -> list:
-        """Add form, H2H, news, weather to each match."""
         print("\n📊 Enriching match data...")
         all_news = self.news.get_all_news()
         enriched = []
 
         for i, m in enumerate(matches):
             try:
-                home = m.get("home_team", "")
-                away = m.get("away_team", "")
+                home   = m.get("home_team", "")
+                away   = m.get("away_team", "")
                 source = m.get("source", "")
 
                 print(
-                    f"   Enriching {i+1}/{len(matches)}: "
+                    f"   [{i+1}/{len(matches)}] "
                     f"{home} vs {away}"
                 )
 
-                # Form data (football-data.org only)
                 home_form = {}
                 away_form = {}
-                h2h = {}
+                h2h       = {}
 
                 if source == "football_data_org":
-                    home_id = m.get("home_team_id")
-                    away_id = m.get("away_team_id")
+                    home_id  = m.get("home_team_id")
+                    away_id  = m.get("away_team_id")
                     match_id = m.get("id")
 
                     if home_id:
-                        home_form = self.fd.get_team_form(
-                            home_id
-                        )
+                        home_form = \
+                            self.fd.get_team_form(home_id)
                         time.sleep(1)
-
                     if away_id:
-                        away_form = self.fd.get_team_form(
-                            away_id
-                        )
+                        away_form = \
+                            self.fd.get_team_form(away_id)
                         time.sleep(1)
-
                     if match_id:
                         h2h = self.fd.get_h2h(match_id)
                         time.sleep(1)
 
-                # News impact
                 h_impact, h_note = \
                     self.news.get_news_impact(
                         home, all_news
@@ -154,8 +166,9 @@ class DataCollector:
                         away, all_news
                     )
 
-                # Weather
-                kickoff_str = m.get("kickoff_uk", "15:00")
+                kickoff_str = m.get(
+                    "kickoff_uk", "15:00"
+                )
                 try:
                     kickoff_h = int(
                         kickoff_str.split(":")[0]
@@ -167,15 +180,36 @@ class DataCollector:
                     home, kickoff_h
                 )
 
+                home_value = {}
+                away_value = {}
+
+                if (
+                    source == "sportdb_api"
+                    and self.sportdb.api_key
+                ):
+                    try:
+                        home_value = \
+                            self.sportdb.get_squad_value(
+                                home
+                            )
+                        away_value = \
+                            self.sportdb.get_squad_value(
+                                away
+                            )
+                    except Exception:
+                        pass
+
                 m.update({
-                    "home_form":          home_form,
-                    "away_form":          away_form,
-                    "h2h":               h2h,
-                    "home_news_impact":  h_impact,
-                    "home_news_note":    h_note,
-                    "away_news_impact":  a_impact,
-                    "away_news_note":    a_note,
-                    "weather":           weather,
+                    "home_form":        home_form,
+                    "away_form":        away_form,
+                    "h2h":             h2h,
+                    "home_news_impact": h_impact,
+                    "home_news_note":   h_note,
+                    "away_news_impact": a_impact,
+                    "away_news_note":   a_note,
+                    "weather":          weather,
+                    "home_squad_value": home_value,
+                    "away_squad_value": away_value,
                 })
 
                 enriched.append(m)
@@ -184,5 +218,7 @@ class DataCollector:
                 print(f"   Enrichment error: {e}")
                 enriched.append(m)
 
-        print(f"\n   ✅ Enriched {len(enriched)} matches")
+        print(
+            f"\n   ✅ Enriched {len(enriched)} matches"
+        )
         return enriched
