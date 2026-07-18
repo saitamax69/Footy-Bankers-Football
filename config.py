@@ -2,7 +2,7 @@ import pytz
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FOOTY BANKERS FOOTBALL
-# Full Configuration - Updated
+# Full Configuration - Final Version
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Brand
@@ -30,13 +30,13 @@ STRONG_MIN = 65
 VALUE_MIN  = 55
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GROQ MODELS - Updated July 2026
-# Check https://console.groq.com/docs/models
-# for latest available models
+# GROQ MODELS
+# Verified working July 2026
+# Primary model confirmed working in test.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 GROQ_PRIMARY_MODEL  = "llama-3.3-70b-versatile"
-GROQ_FALLBACK_MODEL = "llama3-70b-8192"
-GROQ_FAST_MODEL     = "llama3-8b-8192"
+GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
+GROQ_FAST_MODEL     = "openai/gpt-oss-120b"
 
 # Scoring weights
 WEIGHTS = {
@@ -56,10 +56,11 @@ EVENING_HOUR   = 22
 EVENING_MINUTE = 30
 
 # Random delay range (minutes)
+# Makes posting look human not robotic
 DELAY_MIN = 2
 DELAY_MAX = 25
 
-# Data sources - API Football removed
+# Data sources (API-Football removed)
 DATA_SOURCES = [
     "football_data_org",
     "sports_db",
@@ -74,23 +75,23 @@ LEAGUES = {
     "BL1": {"name": "Bundesliga",        "flag": "🇩🇪", "tier": 1},
     "SA":  {"name": "Serie A",           "flag": "🇮🇹", "tier": 1},
     "FL1": {"name": "Ligue 1",           "flag": "🇫🇷", "tier": 1},
-    "CL":  {"name": "Champions League",  "flag": "🏆", "tier": 1},
+    "CL":  {"name": "Champions League",  "flag": "🏆",  "tier": 1},
     # Tier 2
-    "EL":  {"name": "Europa League",     "flag": "🟠", "tier": 2},
+    "EL":  {"name": "Europa League",     "flag": "🟠",  "tier": 2},
     "ELC": {"name": "Championship",      "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 2},
     "PPL": {"name": "Primeira Liga",     "flag": "🇵🇹", "tier": 2},
     "DED": {"name": "Eredivisie",        "flag": "🇳🇱", "tier": 2},
     "BSA": {"name": "Brasileirao",       "flag": "🇧🇷", "tier": 2},
     "EC":  {"name": "Euros",             "flag": "🇪🇺", "tier": 2},
-    "WC":  {"name": "World Cup",         "flag": "🌍", "tier": 2},
+    "WC":  {"name": "World Cup",         "flag": "🌍",  "tier": 2},
     # Tier 3
-    "CLI": {"name": "Copa Libertadores", "flag": "🌎", "tier": 3},
+    "CLI": {"name": "Copa Libertadores", "flag": "🌎",  "tier": 3},
     "MLS": {"name": "MLS",              "flag": "🇺🇸", "tier": 3},
     "FAC": {"name": "FA Cup",            "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 3},
     "COL": {"name": "Carabao Cup",       "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 3},
 }
 
-# RSS Feeds - Updated working feeds
+# RSS Feeds - Verified working July 2026
 RSS_FEEDS = {
     "bbc":       "https://feeds.bbci.co.uk/sport/football/rss.xml",
     "sky":       "https://www.skysports.com/rss/12040",
