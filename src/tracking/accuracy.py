@@ -6,14 +6,10 @@ from config import ACCURACY_FILE, TIMEZONE
 
 
 class AccuracyTracker:
-    """
-    Tracks prediction accuracy.
-    Stores in data/accuracy.json
-    committed to GitHub repo.
-    """
+    """Tracks prediction accuracy in JSON file."""
 
     def __init__(self):
-        self.tz = TIMEZONE
+        self.tz   = TIMEZONE
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -23,14 +19,13 @@ class AccuracyTracker:
                     return json.load(f)
             except Exception:
                 pass
-
         return {
-            "overall_correct": 0,
-            "overall_total":   0,
-            "streak":          0,
-            "best_streak":     0,
+            "overall_correct":  0,
+            "overall_total":    0,
+            "streak":           0,
+            "best_streak":      0,
             "weekly_breakdown": [],
-            "yesterday":       {},
+            "yesterday":        {},
         }
 
     def save(self):
@@ -42,23 +37,20 @@ class AccuracyTracker:
             json.dump(self.data, f, indent=2)
 
     def update(self, results: list):
-        """Update accuracy from todays results."""
         correct = sum(
             1 for r in results if r.get("correct")
         )
         total = len(results)
-        pct = round(
+        pct   = round(
             correct / total * 100, 1
         ) if total else 0
 
         now = datetime.now(self.tz)
         day = now.strftime("%A")
 
-        # Update totals
         self.data["overall_correct"] += correct
         self.data["overall_total"]   += total
 
-        # Update streak
         if correct == total and total > 0:
             self.data["streak"] += total
         elif correct > 0:
@@ -66,13 +58,12 @@ class AccuracyTracker:
         else:
             self.data["streak"] = 0
 
-        # Update best streak
         if self.data["streak"] > self.data.get(
             "best_streak", 0
         ):
-            self.data["best_streak"] = self.data["streak"]
+            self.data["best_streak"] = \
+                self.data["streak"]
 
-        # Weekly breakdown (keep 14 days)
         entry = {
             "day":     day,
             "date":    now.strftime("%Y-%m-%d"),
@@ -80,15 +71,14 @@ class AccuracyTracker:
             "total":   total,
             "pct":     pct,
         }
+
         breakdown = self.data.get(
             "weekly_breakdown", []
         )
         breakdown.append(entry)
-        self.data["weekly_breakdown"] = breakdown[-14:]
-
-        # Yesterday
+        self.data["weekly_breakdown"] = \
+            breakdown[-14:]
         self.data["yesterday"] = entry
-
         self.save()
 
     @property
@@ -97,8 +87,7 @@ class AccuracyTracker:
         t = self.data.get("overall_total", 0)
         if t < 10:
             return "Building..."
-        pct = round(c / t * 100, 1)
-        return f"{pct}% ({c}/{t})"
+        return f"{round(c/t*100, 1)}% ({c}/{t})"
 
     @property
     def streak(self) -> int:
