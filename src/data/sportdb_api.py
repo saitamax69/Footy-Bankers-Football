@@ -9,306 +9,303 @@ from src.data.team_names import normalise
 
 class SportDBApi:
     """
-    SportDB API integration.
-    Flashscore: Live scores and fixtures
-                from every league on earth.
-    Transfermarkt: Player values and squad data.
-
-    API: api.sportdb.dev
-    Key: SPORTDB_API_KEY secret
+    SportDB API - Flashscore + Transfermarkt
+    
+    Flashscore structure:
+    /flashscore/football
+    → Returns list of countries
+    
+    /flashscore/football/{country}:{id}
+    → Returns competitions in that country
+    
+    /flashscore/football/{competition}:{id}/matches
+    → Returns actual matches
+    
+    We cache country/competition IDs
+    and only fetch matches we need.
     """
 
-    BASE = "https://api.sportdb.dev/api"
+    BASE_URL = "https://api.sportdb.dev/api"
+
+    # Top competitions to always check
+    # Format: "slug:id" from the API
+    TOP_COMPETITIONS = [
+        # These will be populated after
+        # first run discovers them
+        # We start with known major ones
+        # and add more as API reveals them
+    ]
 
     def __init__(self):
         self.api_key = os.environ.get(
             "SPORTDB_API_KEY", ""
         )
-        self.headers = {"X-API-Key": self.api_key}
-        self.tz      = pytz.timezone("Europe/London")
-        self._last   = 0
+        self.headers = {
+            "X-API-Key": self.api_key,
+        }
+        self.tz = pytz.timezone("Europe/London")
+        self._last_call = 0
+        self._countries_cache = []
+        self._competitions_cache = {}
 
     def _get(
         self,
         endpoint: str,
         params: dict = None,
-        delay: float = 1.0,
-    ) -> dict:
-        """Rate limited GET request."""
-        if not self.api_key:
-            return {}
-
-        gap = time.time() - self._last
+        delay: float = 0.5,
+    ) -> any:
+        """Rate limited GET. Returns parsed JSON."""
+        gap = time.time() - self._last_call
         if gap < delay:
             time.sleep(delay - gap)
 
         try:
             r = requests.get(
-                f"{self.BASE}{endpoint}",
+                f"{self.BASE_URL}{endpoint}",
                 headers=self.headers,
                 params=params or {},
                 timeout=15,
             )
-            self._last = time.time()
+            self._last_call = time.time()
 
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 401:
                 print("SportDB: Invalid API key")
-                return {}
+                return None
             elif r.status_code == 429:
-                print("SportDB: Rate limited - 30s")
-                time.sleep(30)
-                return {}
+                print("SportDB: Rate limited - waiting")
+                time.sleep(10)
+                return None
             elif r.status_code == 404:
-                return {}
+                return None
             else:
-                print(
-                    f"SportDB {r.status_code}: "
-                    f"{endpoint}"
-                )
-                return {}
+                return None
 
-        except requests.Timeout:
-            print(f"SportDB timeout: {endpoint}")
-            return {}
         except Exception as e:
-            print(f"SportDB error: {e}")
-            return {}
+            print(f"SportDB request error: {e}")
+            return None
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # FLASHSCORE
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    def get_countries(self) -> list:
+        """
+        Get list of all countries.
+        Returns: [{"name": "Albania", "id": 17, ...}]
+        """
+        if self._countries_cache:
+            return self._countries_cache
 
-    def get_todays_matches(self) -> list:
-        """All football matches today."""
         data = self._get("/flashscore/football")
+
         if not data:
             return []
-        return self._parse_matches(data)
 
-    def get_live_scores(self) -> list:
-        """Currently live matches."""
+        if isinstance(data, list):
+            self._countries_cache = data
+        elif isinstance(data, dict):
+            self._countries_cache = (
+                data.get("countries")
+                or data.get("data")
+                or []
+            )
+
+        return self._countries_cache
+
+    def get_competitions_for_country(
+        self, country_slug: str, country_id: int
+    ) -> list:
+        """
+        Get competitions for a specific country.
+        """
+        cache_key = f"{country_slug}:{country_id}"
+
+        if cache_key in self._competitions_cache:
+            return self._competitions_cache[cache_key]
+
         data = self._get(
-            "/flashscore/football/live"
+            f"/flashscore/football"
+            f"/{country_slug}:{country_id}"
         )
+
         if not data:
             return []
-        matches = self._parse_matches(data)
-        live = []
-        for m in matches:
-            status = m.get("status", "").lower()
-            if any(
-                s in status for s in [
-                    "live", "playing", "1h",
-                    "2h", "ht", "in_progress",
-                ]
-            ):
-                live.append(m)
-        return live
 
-    def get_match_details(
-        self, match_id: str
-    ) -> dict:
-        """Detailed stats for one match."""
-        return self._get(
-            f"/flashscore/football/match/{match_id}"
-        ) or {}
+        if isinstance(data, list):
+            comps = data
+        elif isinstance(data, dict):
+            comps = (
+                data.get("competitions")
+                or data.get("data")
+                or []
+            )
+        else:
+            comps = []
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # TRANSFERMARKT
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        self._competitions_cache[cache_key] = comps
+        return comps
 
-    def get_player_value(
-        self, player_name: str
-    ) -> dict:
-        """Market value for a player."""
-        data = self._get(
-            "/transfermarkt/player/search",
-            params={"name": player_name},
-        )
-        if not data:
-            return {}
-        players = (
-            data.get("players")
-            or data.get("results")
-            or data.get("data")
-            or []
-        )
-        return players[0] if players else {}
-
-    def get_squad_value(
-        self, team_name: str
-    ) -> dict:
+    def get_matches_for_competition(
+        self,
+        competition_slug: str,
+        competition_id: int,
+    ) -> list:
         """
-        Total squad market value.
-        For injury impact context.
-        'City missing £150M of squad'
+        Get todays matches for a specific competition.
         """
         data = self._get(
-            "/transfermarkt/team/search",
-            params={"name": team_name},
+            f"/flashscore/football"
+            f"/{competition_slug}:{competition_id}"
+            f"/matches"
         )
+
         if not data:
-            return {}
-
-        teams = (
-            data.get("teams")
-            or data.get("results")
-            or data.get("data")
-            or []
-        )
-        if not teams:
-            return {}
-
-        team    = teams[0]
-        team_id = team.get("id")
-
-        if not team_id:
-            return {}
-
-        squad_data = self._get(
-            f"/transfermarkt/team/{team_id}/squad"
-        )
-        if not squad_data:
-            return {}
-
-        squad = (
-            squad_data.get("squad")
-            or squad_data.get("players")
-            or []
-        )
-
-        total = 0
-        count = 0
-        for p in squad:
-            v = p.get("market_value", 0)
-            if isinstance(v, (int, float)) and v > 0:
-                total += v
-                count += 1
-
-        return {
-            "team":          team_name,
-            "squad_size":    count,
-            "total_value_m": round(
-                total / 1_000_000, 1
-            ),
-            "avg_value_m": round(
-                total / 1_000_000 / count, 1
-            ) if count else 0,
-        }
-
-    def get_transfer_news(self) -> list:
-        """Latest transfer news for media posts."""
-        data = self._get(
-            "/transfermarkt/transfers/latest"
-        )
-        return (
-            data.get("transfers", [])
-            if data else []
-        )
-
-    def test_connection(self) -> bool:
-        """Test API key and connection."""
-        if not self.api_key:
-            return False
-        data = self._get(
-            "/transfermarkt/countries"
-        )
-        if data:
-            return True
-        data2 = self._get("/flashscore/football")
-        return bool(data2)
-
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # PARSER
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    def _parse_matches(self, data) -> list:
-        """Parse Flashscore data to standard format."""
-        out = []
+            return []
 
         if isinstance(data, list):
             matches = data
-        else:
+        elif isinstance(data, dict):
             matches = (
                 data.get("matches")
                 or data.get("events")
                 or data.get("data")
                 or []
             )
+        else:
+            matches = []
+
+        return self._parse_matches(
+            matches,
+            competition_slug
+        )
+
+    def get_todays_matches(
+        self,
+        max_countries: int = 20,
+    ) -> list:
+        """
+        Get todays matches from Flashscore.
+        
+        Strategy:
+        1. Get country list
+        2. For top countries get competitions
+        3. For each competition get matches
+        4. Return all matches found
+        
+        max_countries limits API calls.
+        Priority countries checked first.
+        """
+        if not self.api_key:
+            return []
+
+        print(
+            "   SportDB: Fetching matches..."
+        )
+
+        # Priority country names to check first
+        priority_countries = [
+            "england", "spain", "germany",
+            "italy", "france", "netherlands",
+            "portugal", "scotland", "turkey",
+            "belgium", "brazil", "argentina",
+            "usa", "greece", "russia",
+            "ukraine", "czech-republic",
+            "croatia", "austria", "switzerland",
+        ]
+
+        countries = self.get_countries()
+        if not countries:
+            print("   SportDB: No countries found")
+            return []
+
+        print(
+            f"   SportDB: {len(countries)} countries"
+        )
+
+        # Sort: priority countries first
+        def priority_sort(country):
+            slug = country.get("slug", "").lower()
+            name = country.get("name", "").lower()
+            for i, p in enumerate(priority_countries):
+                if p in slug or p in name:
+                    return i
+            return 999
+
+        sorted_countries = sorted(
+            countries, key=priority_sort
+        )
+
+        all_matches = []
+        countries_checked = 0
+
+        for country in sorted_countries:
+            if countries_checked >= max_countries:
+                break
+
+            slug = country.get("slug", "")
+            cid  = country.get("id")
+
+            if not slug or not cid:
+                continue
+
+            # Get competitions for this country
+            competitions = \
+                self.get_competitions_for_country(
+                    slug, cid
+                )
+
+            for comp in competitions[:3]:
+                # Max 3 competitions per country
+                comp_slug = comp.get("slug", "")
+                comp_id   = comp.get("id")
+
+                if not comp_slug or not comp_id:
+                    continue
+
+                matches = \
+                    self.get_matches_for_competition(
+                        comp_slug, comp_id
+                    )
+
+                for m in matches:
+                    m["country"] = country.get("name")
+                    all_matches.append(m)
+
+                time.sleep(0.3)
+
+            countries_checked += 1
+
+        print(
+            f"   SportDB: Found "
+            f"{len(all_matches)} matches"
+        )
+        return all_matches
+
+    def _parse_matches(
+        self, matches: list, comp_name: str = ""
+    ) -> list:
+        """Parse match data to standard format."""
+        out = []
 
         for m in matches:
             try:
-                home = (
-                    m.get("home_team")
-                    or m.get("homeTeam")
-                    or (
-                        m.get("home", {}).get("name")
-                        if isinstance(m.get("home"), dict)
-                        else m.get("home")
-                    )
-                    or ""
-                )
-                away = (
-                    m.get("away_team")
-                    or m.get("awayTeam")
-                    or (
-                        m.get("away", {}).get("name")
-                        if isinstance(m.get("away"), dict)
-                        else m.get("away")
-                    )
-                    or ""
-                )
+                # Try every possible field name
+                home = self._extract_team(m, "home")
+                away = self._extract_team(m, "away")
 
                 if not home or not away:
                     continue
 
-                kickoff_raw = (
-                    m.get("start_time")
-                    or m.get("startTime")
-                    or m.get("time")
-                    or m.get("date")
-                    or ""
-                )
-                uk_time = self._parse_time(
-                    kickoff_raw
-                )
-
-                competition = str(
+                competition = (
                     m.get("tournament")
                     or m.get("competition")
                     or m.get("league")
-                    or m.get("league_name")
+                    or m.get("name")
+                    or m.get("competition_name")
+                    or comp_name
                     or "Football"
                 )
 
-                status = str(
-                    m.get("status")
-                    or m.get("match_status")
-                    or "scheduled"
-                ).lower()
-
-                home_score = (
-                    m.get("home_score")
-                    or (
-                        m.get("score", {}).get("home")
-                        if isinstance(
-                            m.get("score"), dict
-                        )
-                        else None
-                    )
-                )
-                away_score = (
-                    m.get("away_score")
-                    or (
-                        m.get("score", {}).get("away")
-                        if isinstance(
-                            m.get("score"), dict
-                        )
-                        else None
-                    )
-                )
+                kickoff = self._extract_time(m)
+                status  = self._extract_status(m)
 
                 out.append({
                     "id": (
@@ -317,7 +314,7 @@ class SportDBApi:
                         or f"sdb_{home}_{away}"
                     ),
                     "source":           "sportdb_api",
-                    "competition_name": competition,
+                    "competition_name": str(competition),
                     "competition_code": "",
                     "home_team":        home,
                     "home_team_norm":   normalise(home),
@@ -325,41 +322,107 @@ class SportDBApi:
                     "away_team":        away,
                     "away_team_norm":   normalise(away),
                     "away_team_id":     m.get("away_id"),
-                    "kickoff_uk":       uk_time,
+                    "kickoff_uk":       kickoff,
                     "kickoff_dt":       None,
                     "status":           status,
-                    "home_score":       home_score,
-                    "away_score":       away_score,
                     "country":          m.get("country", ""),
                 })
 
             except Exception as e:
-                print(f"SportDB parse error: {e}")
                 continue
 
         return out
 
-    def _parse_time(self, raw) -> str:
-        """Convert raw time to HH:MM UK format."""
+    def _extract_team(
+        self, m: dict, side: str
+    ) -> str:
+        """Extract team name trying all field names."""
+        direct_keys = [
+            f"{side}_team",
+            f"{side}Team",
+            f"{side}_name",
+            f"{side}_team_name",
+            f"{side}TeamName",
+        ]
+
+        for key in direct_keys:
+            val = m.get(key)
+            if val and isinstance(val, str):
+                return val
+
+        # Try nested dict
+        nested = m.get(side)
+        if isinstance(nested, dict):
+            return (
+                nested.get("name")
+                or nested.get("team_name")
+                or nested.get("title")
+                or ""
+            )
+
+        # Try teams dict
+        teams = m.get("teams", {})
+        if isinstance(teams, dict):
+            team = teams.get(side, {})
+            if isinstance(team, dict):
+                return team.get("name", "")
+
+        return ""
+
+    def _extract_time(self, m: dict) -> str:
+        """Extract kickoff time as HH:MM UK."""
+        raw = (
+            m.get("start_time")
+            or m.get("startTime")
+            or m.get("time")
+            or m.get("date")
+            or m.get("kickoff")
+            or m.get("match_time")
+        )
+
         if not raw:
             return "TBC"
+
         try:
             if "T" in str(raw):
                 dt = datetime.fromisoformat(
                     str(raw).replace("Z", "+00:00")
                 )
-                return dt.astimezone(
-                    self.tz
-                ).strftime("%H:%M")
+                uk = dt.astimezone(self.tz)
+                return uk.strftime("%H:%M")
+
             if isinstance(raw, (int, float)):
                 dt = datetime.fromtimestamp(
                     raw, tz=pytz.utc
                 )
-                return dt.astimezone(
-                    self.tz
-                ).strftime("%H:%M")
-            if ":" in str(raw) and len(str(raw)) <= 5:
-                return str(raw)
+                uk = dt.astimezone(self.tz)
+                return uk.strftime("%H:%M")
+
+            if (
+                isinstance(raw, str)
+                and ":" in raw
+                and len(raw) <= 5
+            ):
+                return raw
+
         except Exception:
             pass
+
         return "TBC"
+
+    def _extract_status(self, m: dict) -> str:
+        """Extract match status."""
+        raw = (
+            m.get("status")
+            or m.get("match_status")
+            or m.get("state")
+            or "scheduled"
+        )
+        return str(raw).lower()
+
+    def test_connection(self) -> bool:
+        """Test API is working."""
+        if not self.api_key:
+            return False
+        data = self._get("/transfermarkt/countries")
+        return bool(data)
