@@ -2,7 +2,6 @@ import requests
 from datetime import datetime
 import pytz
 
-# Stadium coordinates for weather lookup
 STADIUMS = {
     "manchester city":    (53.4831, -2.2004),
     "manchester united":  (53.4631, -2.2913),
@@ -17,16 +16,16 @@ STADIUMS = {
     "juventus":           (45.1096,  7.6413),
     "ac milan":           (45.4781,  9.1240),
     "inter milan":        (45.4781,  9.1240),
-    "paris saint-germain": (48.8414,  2.2530),
+    "paris saint-germain": (48.8414, 2.2530),
 }
 
-DEFAULT_COORDS = (51.5074, -0.1278)  # London
+DEFAULT = (51.5074, -0.1278)
 
 
 class WeatherChecker:
     """
-    Gets match weather from Open-Meteo.
-    Completely free. No API key needed.
+    Open-Meteo weather API.
+    Completely free. No key needed.
     """
 
     BASE = "https://api.open-meteo.com/v1/forecast"
@@ -34,9 +33,8 @@ class WeatherChecker:
     def get_match_weather(
         self, team_name: str, kickoff_hour: int
     ) -> dict:
-        """Get weather for team's stadium at kickoff."""
-        coords = STADIUMS.get(
-            team_name.lower(), DEFAULT_COORDS
+        coords  = STADIUMS.get(
+            team_name.lower(), DEFAULT
         )
         lat, lon = coords
 
@@ -44,15 +42,15 @@ class WeatherChecker:
             r = requests.get(
                 self.BASE,
                 params={
-                    "latitude":   lat,
-                    "longitude":  lon,
-                    "hourly":     [
+                    "latitude":      lat,
+                    "longitude":     lon,
+                    "hourly":        [
                         "precipitation",
                         "windspeed_10m",
                         "temperature_2m",
                     ],
                     "forecast_days": 1,
-                    "timezone":   "Europe/London",
+                    "timezone":      "Europe/London",
                 },
                 timeout=10,
             )
@@ -60,36 +58,35 @@ class WeatherChecker:
             if r.status_code != 200:
                 return self._default()
 
-            data = r.json()
-            hourly = data.get("hourly", {})
-            times = hourly.get("time", [])
+            hourly = r.json().get("hourly", {})
+            times  = hourly.get("time", [])
+            idx    = 0
 
-            # Find closest hour to kickoff
-            idx = 0
             for i, t in enumerate(times):
                 h = int(t.split("T")[1].split(":")[0])
                 if h == kickoff_hour:
                     idx = i
                     break
 
-            rain = hourly.get(
-                "precipitation", [0]
-            )[idx] if hourly.get("precipitation") else 0
-            wind = hourly.get(
-                "windspeed_10m", [0]
-            )[idx] if hourly.get("windspeed_10m") else 0
-            temp = hourly.get(
-                "temperature_2m", [15]
-            )[idx] if hourly.get("temperature_2m") else 15
-
-            impact = self._calc_impact(rain, wind)
+            rain  = (
+                hourly.get("precipitation", [0])[idx]
+                if hourly.get("precipitation") else 0
+            )
+            wind  = (
+                hourly.get("windspeed_10m", [0])[idx]
+                if hourly.get("windspeed_10m") else 0
+            )
+            temp  = (
+                hourly.get("temperature_2m", [15])[idx]
+                if hourly.get("temperature_2m") else 15
+            )
 
             return {
-                "rain_mm":      round(rain, 1),
-                "wind_kmh":     round(wind, 1),
-                "temp_c":       round(temp, 1),
-                "impact":       impact,
-                "description":  self._describe(
+                "rain_mm":     round(rain, 1),
+                "wind_kmh":    round(wind, 1),
+                "temp_c":      round(temp, 1),
+                "impact":      self._impact(rain, wind),
+                "description": self._describe(
                     rain, wind, temp
                 ),
             }
@@ -98,11 +95,7 @@ class WeatherChecker:
             print(f"Weather failed: {e}")
             return self._default()
 
-    def _calc_impact(self, rain, wind) -> int:
-        """
-        Negative = favours under/defensive
-        Positive = neutral or more goals
-        """
+    def _impact(self, rain, wind) -> int:
         impact = 0
         if rain > 5:
             impact -= 5
@@ -115,14 +108,13 @@ class WeatherChecker:
     def _describe(self, rain, wind, temp) -> str:
         if rain > 10:
             return "Heavy rain expected"
-        elif rain > 3:
+        if rain > 3:
             return "Light rain expected"
-        elif wind > 50:
+        if wind > 50:
             return "Very windy conditions"
-        elif temp < 2:
+        if temp < 2:
             return "Freezing conditions"
-        else:
-            return "Good playing conditions"
+        return "Good playing conditions"
 
     def _default(self) -> dict:
         return {
@@ -130,5 +122,5 @@ class WeatherChecker:
             "wind_kmh":    0,
             "temp_c":      15,
             "impact":      0,
-            "description": "Weather data unavailable",
+            "description": "Weather unavailable",
         }
