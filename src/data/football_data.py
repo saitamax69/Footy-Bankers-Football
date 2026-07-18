@@ -11,24 +11,23 @@ class FootballDataOrg:
     """
     Primary data source.
     football-data.org free tier.
-    10 requests per minute.
+    10 requests per minute limit.
     """
 
     BASE = "https://api.football-data.org/v4"
 
     def __init__(self):
-        self.key = os.environ.get("FOOTBALL_DATA_API_KEY", "")
+        self.key     = os.environ.get(
+            "FOOTBALL_DATA_API_KEY", ""
+        )
         self.headers = {"X-Auth-Token": self.key}
-        self.tz = pytz.timezone("Europe/London")
-        self._last_call = 0
+        self.tz      = pytz.timezone("Europe/London")
+        self._last   = 0
 
     def _get(self, endpoint: str, params: dict = None):
-        """Rate-limited GET request."""
-        # Enforce 6 second gap between calls (10/min)
-        gap = time.time() - self._last_call
+        gap = time.time() - self._last
         if gap < 6:
             time.sleep(6 - gap)
-
         try:
             r = requests.get(
                 f"{self.BASE}{endpoint}",
@@ -36,31 +35,36 @@ class FootballDataOrg:
                 params=params or {},
                 timeout=15,
             )
-            self._last_call = time.time()
-
+            self._last = time.time()
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 429:
-                print("Rate limited. Waiting 60s.")
+                print("FD: Rate limited. Waiting 60s.")
                 time.sleep(60)
                 return None
             else:
-                print(f"FD error {r.status_code}: {endpoint}")
+                print(
+                    f"FD error {r.status_code}: "
+                    f"{endpoint}"
+                )
                 return None
-
         except Exception as e:
             print(f"FD request failed: {e}")
             return None
 
     def get_todays_matches(self) -> list:
-        today = datetime.now(self.tz).strftime("%Y-%m-%d")
+        today = datetime.now(self.tz).strftime(
+            "%Y-%m-%d"
+        )
         data = self._get(
             "/matches",
             {"dateFrom": today, "dateTo": today},
         )
         if not data:
             return []
-        return self._parse_matches(data.get("matches", []))
+        return self._parse_matches(
+            data.get("matches", [])
+        )
 
     def get_team_form(self, team_id: int) -> dict:
         data = self._get(
@@ -86,11 +90,10 @@ class FootballDataOrg:
         data = self._get(f"/matches/{match_id}")
         if not data:
             return {}
-        m = data.get("match", data)
-        score = m.get("score", {})
-        ft = score.get("fullTime", {})
+        m  = data.get("match", data)
+        ft = m.get("score", {}).get("fullTime", {})
         return {
-            "status": m.get("status", ""),
+            "status":     m.get("status", ""),
             "home_goals": ft.get("home"),
             "away_goals": ft.get("away"),
         }
@@ -125,52 +128,52 @@ class FootballDataOrg:
                     "matchday":         m.get("matchday"),
                 })
             except Exception as e:
-                print(f"Match parse error: {e}")
+                print(f"FD match parse error: {e}")
         return out
 
-    def _calc_form(self, matches: list, team_id: int) -> dict:
+    def _calc_form(
+        self, matches: list, team_id: int
+    ) -> dict:
         wins = draws = losses = 0
-        gf_total = ga_total = 0
+        gf = ga = 0
         form = []
-
         for m in matches[-10:]:
-            ft = m.get("score", {}).get("fullTime", {})
+            ft = m.get("score", {}).get(
+                "fullTime", {}
+            )
             h = ft.get("home")
             a = ft.get("away")
             if h is None or a is None:
                 continue
-
             is_home = m["homeTeam"]["id"] == team_id
-            gf = h if is_home else a
-            ga = a if is_home else h
-
-            gf_total += gf
-            ga_total += ga
-
-            if gf > ga:
+            scored    = h if is_home else a
+            conceded  = a if is_home else h
+            gf += scored
+            ga += conceded
+            if scored > conceded:
                 wins += 1
                 form.append("W")
-            elif gf == ga:
+            elif scored == conceded:
                 draws += 1
                 form.append("D")
             else:
                 losses += 1
                 form.append("L")
-
         total = wins + draws + losses
         if total == 0:
             return {}
-
         return {
-            "wins":             wins,
-            "draws":            draws,
-            "losses":           losses,
-            "total":            total,
-            "win_rate":         round(wins / total * 100, 1),
-            "goals_for_avg":    round(gf_total / total, 2),
-            "goals_against_avg": round(ga_total / total, 2),
-            "form_string":      "".join(reversed(form)),
-            "ppg":              round(
+            "wins":              wins,
+            "draws":             draws,
+            "losses":            losses,
+            "total":             total,
+            "win_rate":          round(
+                wins / total * 100, 1
+            ),
+            "goals_for_avg":     round(gf / total, 2),
+            "goals_against_avg": round(ga / total, 2),
+            "form_string":       "".join(reversed(form)),
+            "ppg":               round(
                 (wins * 3 + draws) / total, 2
             ),
         }
@@ -179,10 +182,11 @@ class FootballDataOrg:
         matches = data.get("matches", [])
         if not matches:
             return {}
-
         hw = aw = dr = goals = 0
         for m in matches:
-            ft = m.get("score", {}).get("fullTime", {})
+            ft = m.get("score", {}).get(
+                "fullTime", {}
+            )
             h = ft.get("home")
             a = ft.get("away")
             if h is None or a is None:
@@ -194,12 +198,13 @@ class FootballDataOrg:
                 aw += 1
             else:
                 dr += 1
-
         total = hw + aw + dr
         return {
-            "home_wins":  hw,
-            "away_wins":  aw,
-            "draws":      dr,
-            "total":      total,
-            "avg_goals":  round(goals / total, 2) if total else 0,
+            "home_wins": hw,
+            "away_wins": aw,
+            "draws":     dr,
+            "total":     total,
+            "avg_goals": round(
+                goals / total, 2
+            ) if total else 0,
         }
