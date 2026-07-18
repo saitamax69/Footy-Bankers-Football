@@ -3,8 +3,13 @@ import json
 import time
 from groq import Groq
 from config import (
-    BANKER_MIN, STRONG_MIN, VALUE_MIN,
+    BANKER_MIN,
+    STRONG_MIN,
+    VALUE_MIN,
     MIN_CONFIDENCE,
+    GROQ_PRIMARY_MODEL,
+    GROQ_FALLBACK_MODEL,
+    GROQ_FAST_MODEL,
 )
 
 
@@ -25,31 +30,35 @@ Minimum to recommend: 55
 class FootballPredictor:
     """
     AI prediction engine using Groq.
-    Single model. Fast. Free.
+    Updated models - July 2026.
+    Primary: llama-3.3-70b-versatile
+    Fallback: llama3-70b-8192
     """
 
     def __init__(self):
         self.client = Groq(
             api_key=os.environ.get("GROQ_API_KEY", "")
         )
-        self.model = "llama-3.1-70b-versatile"
-        self.fallback = "mixtral-8x7b-32768"
+        self.primary  = GROQ_PRIMARY_MODEL
+        self.fallback = GROQ_FALLBACK_MODEL
+        self.fast     = GROQ_FAST_MODEL
 
     def analyse(self, match: dict) -> dict:
         """Analyse one match and return prediction."""
         prompt = self._build_prompt(match)
 
-        for model in [self.model, self.fallback]:
+        for model in [self.primary, self.fallback, self.fast]:
             try:
+                print(f"      Using model: {model}")
                 resp = self.client.chat.completions.create(
                     model=model,
                     messages=[
                         {
-                            "role": "system",
+                            "role":    "system",
                             "content": SYSTEM_PROMPT,
                         },
                         {
-                            "role": "user",
+                            "role":    "user",
                             "content": prompt,
                         },
                     ],
@@ -58,7 +67,7 @@ class FootballPredictor:
                     response_format={"type": "json_object"},
                 )
 
-                raw = resp.choices[0].message.content
+                raw    = resp.choices[0].message.content
                 result = json.loads(raw)
 
                 conf = result.get("confidence", 0)
@@ -70,13 +79,24 @@ class FootballPredictor:
                 return result
 
             except json.JSONDecodeError:
-                print(f"JSON error with {model}")
+                print(f"      JSON error with {model}")
                 continue
             except Exception as e:
-                print(f"Groq error ({model}): {e}")
-                time.sleep(2)
-                continue
+                err_msg = str(e)
+                if "decommissioned" in err_msg or \
+                   "model_not_found" in err_msg or \
+                   "does not exist" in err_msg:
+                    print(
+                        f"      Model {model} not available"
+                        f" - trying next"
+                    )
+                    continue
+                else:
+                    print(f"      Groq error ({model}): {e}")
+                    time.sleep(2)
+                    continue
 
+        print("      All models failed for this match")
         return None
 
     def analyse_all(self, matches: list) -> list:
@@ -118,32 +138,32 @@ MATCH: {home} vs {away}
 COMPETITION: {comp}
 
 HOME TEAM - {home}:
-Form string: {hf.get('form_string', 'Unknown')}
-Win rate: {hf.get('win_rate', 'Unknown')}%
-Goals scored avg: {hf.get('goals_for_avg', 'Unknown')}
-Goals conceded avg: {hf.get('goals_against_avg', 'Unknown')}
-Points per game: {hf.get('ppg', 'Unknown')}
-News impact: {m.get('home_news_note', 'Nothing major')}
+Form string: {hf.get("form_string", "Unknown")}
+Win rate: {hf.get("win_rate", "Unknown")}%
+Goals scored avg: {hf.get("goals_for_avg", "Unknown")}
+Goals conceded avg: {hf.get("goals_against_avg", "Unknown")}
+Points per game: {hf.get("ppg", "Unknown")}
+News impact: {m.get("home_news_note", "Nothing major")}
 
 AWAY TEAM - {away}:
-Form string: {af.get('form_string', 'Unknown')}
-Win rate: {af.get('win_rate', 'Unknown')}%
-Goals scored avg: {af.get('goals_for_avg', 'Unknown')}
-Goals conceded avg: {af.get('goals_against_avg', 'Unknown')}
-Points per game: {af.get('ppg', 'Unknown')}
-News impact: {m.get('away_news_note', 'Nothing major')}
+Form string: {af.get("form_string", "Unknown")}
+Win rate: {af.get("win_rate", "Unknown")}%
+Goals scored avg: {af.get("goals_for_avg", "Unknown")}
+Goals conceded avg: {af.get("goals_against_avg", "Unknown")}
+Points per game: {af.get("ppg", "Unknown")}
+News impact: {m.get("away_news_note", "Nothing major")}
 
 HEAD TO HEAD:
-Home wins: {h2h.get('home_wins', 'Unknown')}
-Away wins: {h2h.get('away_wins', 'Unknown')}
-Draws: {h2h.get('draws', 'Unknown')}
-Average goals: {h2h.get('avg_goals', 'Unknown')}
+Home wins: {h2h.get("home_wins", "Unknown")}
+Away wins: {h2h.get("away_wins", "Unknown")}
+Draws: {h2h.get("draws", "Unknown")}
+Average goals: {h2h.get("avg_goals", "Unknown")}
 
 CONDITIONS:
-Weather: {wx.get('description', 'Normal')}
-Weather impact: {wx.get('impact', 0)}
+Weather: {wx.get("description", "Normal")}
+Weather impact score: {wx.get("impact", 0)}
 
-Respond in this exact JSON:
+Respond in this exact JSON format:
 {{
   "pick": "Home Win" or "Away Win" or "Draw" or "Over 2.5" or "Under 2.5" or "BTTS",
   "pick_short": "use actual team name e.g. City Win",
@@ -163,3 +183,15 @@ Respond in this exact JSON:
         if confidence >= VALUE_MIN:
             return "VALUE"
         return "SKIP"
+
+    def get_available_models(self) -> list:
+        """
+        Check which models are currently available.
+        Useful for debugging model issues.
+        """
+        try:
+            models = self.client.models.list()
+            return [m.id for m in models.data]
+        except Exception as e:
+            print(f"Could not fetch models: {e}")
+            return []
