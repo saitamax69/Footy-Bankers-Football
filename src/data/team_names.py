@@ -1,9 +1,5 @@
-import json
-import os
 import re
 
-
-# Core normalisation dictionary
 TEAM_NAME_MAP = {
     "manchester city": [
         "Manchester City FC", "Manchester City",
@@ -78,40 +74,17 @@ TEAM_NAME_MAP = {
 
 
 def normalise(name: str) -> str:
-    """
-    Convert any team name variant
-    to a clean standard form.
-    """
     if not name:
         return ""
-
     cleaned = name.lower().strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
-
     for standard, variants in TEAM_NAME_MAP.items():
-        variants_lower = [v.lower() for v in variants]
-        if cleaned in variants_lower:
+        if cleaned in [v.lower() for v in variants]:
             return standard
         if cleaned == standard:
             return standard
-
     return cleaned
 
 
 def match_names(name1: str, name2: str) -> bool:
-    """
-    Check if two team name strings
-    refer to the same team.
-    """
     return normalise(name1) == normalise(name2)
-
-
-def load_from_file(path: str) -> dict:
-    """Load extended name map from JSON file."""
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
