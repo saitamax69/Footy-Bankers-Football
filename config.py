@@ -32,7 +32,6 @@ VALUE_MIN  = 55
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # GROQ MODELS
 # Verified working July 2026
-# Primary model confirmed working in test.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 GROQ_PRIMARY_MODEL  = "llama-3.3-70b-versatile"
 GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
@@ -56,27 +55,24 @@ EVENING_HOUR   = 22
 EVENING_MINUTE = 30
 
 # Random delay range (minutes)
-# Makes posting look human not robotic
 DELAY_MIN = 2
 DELAY_MAX = 25
 
-# Data sources (API-Football removed)
+# Data sources
 DATA_SOURCES = [
     "football_data_org",
+    "sportdb_api",
     "sports_db",
-    "openligadb",
 ]
 
 # Leagues
 LEAGUES = {
-    # Tier 1 always include
     "PL":  {"name": "Premier League",    "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 1},
     "PD":  {"name": "La Liga",           "flag": "🇪🇸", "tier": 1},
     "BL1": {"name": "Bundesliga",        "flag": "🇩🇪", "tier": 1},
     "SA":  {"name": "Serie A",           "flag": "🇮🇹", "tier": 1},
     "FL1": {"name": "Ligue 1",           "flag": "🇫🇷", "tier": 1},
     "CL":  {"name": "Champions League",  "flag": "🏆",  "tier": 1},
-    # Tier 2
     "EL":  {"name": "Europa League",     "flag": "🟠",  "tier": 2},
     "ELC": {"name": "Championship",      "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 2},
     "PPL": {"name": "Primeira Liga",     "flag": "🇵🇹", "tier": 2},
@@ -84,14 +80,13 @@ LEAGUES = {
     "BSA": {"name": "Brasileirao",       "flag": "🇧🇷", "tier": 2},
     "EC":  {"name": "Euros",             "flag": "🇪🇺", "tier": 2},
     "WC":  {"name": "World Cup",         "flag": "🌍",  "tier": 2},
-    # Tier 3
     "CLI": {"name": "Copa Libertadores", "flag": "🌎",  "tier": 3},
     "MLS": {"name": "MLS",              "flag": "🇺🇸", "tier": 3},
     "FAC": {"name": "FA Cup",            "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 3},
     "COL": {"name": "Carabao Cup",       "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "tier": 3},
 }
 
-# RSS Feeds - Verified working July 2026
+# RSS Feeds
 RSS_FEEDS = {
     "bbc":       "https://feeds.bbci.co.uk/sport/football/rss.xml",
     "sky":       "https://www.skysports.com/rss/12040",
