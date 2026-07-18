@@ -7,8 +7,8 @@ from src.data.team_names import normalise
 
 class TheSportsDB:
     """
-    Third source - no API key needed.
-    thesportsdb.com free tier.
+    Free backup source.
+    thesportsdb.com - No API key needed.
     """
 
     BASE = "https://www.thesportsdb.com/api/v1/json/3"
@@ -17,7 +17,9 @@ class TheSportsDB:
         self.tz = pytz.timezone("Europe/London")
 
     def get_todays_matches(self) -> list:
-        today = datetime.now(self.tz).strftime("%Y-%m-%d")
+        today = datetime.now(self.tz).strftime(
+            "%Y-%m-%d"
+        )
         try:
             r = requests.get(
                 f"{self.BASE}/eventsday.php",
@@ -59,13 +61,20 @@ class TheSportsDB:
                     "competition_code": "",
                     "home_team":        home,
                     "home_team_norm":   normalise(home),
-                    "home_team_id":     e.get("idHomeTeam"),
+                    "home_team_id":     e.get(
+                        "idHomeTeam"
+                    ),
                     "away_team":        away,
                     "away_team_norm":   normalise(away),
-                    "away_team_id":     e.get("idAwayTeam"),
+                    "away_team_id":     e.get(
+                        "idAwayTeam"
+                    ),
                     "kickoff_uk":       uk_time,
                     "kickoff_dt":       None,
                     "status":           "scheduled",
+                    "country":          e.get(
+                        "strCountry", ""
+                    ),
                 })
             except Exception as ex:
                 print(f"SportsDB parse error: {ex}")
