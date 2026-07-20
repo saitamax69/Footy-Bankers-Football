@@ -1,7 +1,66 @@
 """
 Debug script - Full version with match field analysis.
 Run this to see exact API structure.
+"""
+Find correct competition IDs for all major leagues.
+Run this once to get the real IDs.
+"""
 
+import os
+import requests
+import json
+import time
+
+key     = os.environ.get("SPORTDB_API_KEY", "")
+BASE    = "https://api.sportdb.dev/api"
+headers = {"X-API-Key": key}
+
+
+def get(endpoint):
+    url = f"{BASE}{endpoint}"
+    if endpoint.startswith("/api/"):
+        url = f"{BASE}{endpoint[4:]}"
+    r = requests.get(url, headers=headers, timeout=15)
+    if r.status_code == 200:
+        return r.json()
+    return None
+
+
+# Countries we care about
+targets = [
+    ("world",       8),
+    ("england",     198),
+    ("spain",       45),
+    ("germany",     78),
+    ("italy",       102),
+    ("france",      74),
+    ("netherlands", 130),
+    ("portugal",    155),
+    ("brazil",      32),
+    ("argentina",   11),
+]
+
+print("COMPETITION IDS FOR ALL MAJOR LEAGUES\n")
+
+for slug, cid in targets:
+    print(f"\n{'='*50}")
+    print(f"COUNTRY: {slug} (id:{cid})")
+    print(f"{'='*50}")
+
+    comps = get(f"/flashscore/football/{slug}:{cid}")
+    if comps and isinstance(comps, list):
+        for comp in comps[:15]:
+            cname = comp.get("name", "?")
+            cslug = comp.get("slug", "?")
+            cid2  = comp.get("id", "?")
+            link  = comp.get("link", "?")
+            print(f"  {cname}")
+            print(f"    slug: {cslug}")
+            print(f"    id: {cid2}")
+            print(f"    link: {link}")
+    time.sleep(0.5)
+
+print("\n\nDONE - Copy competition IDs above")
 python debug_flashscore.py
 """
 
