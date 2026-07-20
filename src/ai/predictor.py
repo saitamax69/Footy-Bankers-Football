@@ -10,7 +10,6 @@ from config import (
     GROQ_PRIMARY_MODEL,
     GROQ_FALLBACK_MODEL,
     GROQ_FAST_MODEL,
-    MAJOR_TOURNAMENTS,
 )
 
 
@@ -20,28 +19,51 @@ of experience covering all global competitions.
 
 Your knowledge includes:
 - FIFA World Cup history and current tournament
-- UEFA Champions League, Europa League
+- UEFA Champions League and Europa League
 - All top European leagues
-- International tournaments worldwide
-- Team strengths, weaknesses, tactics
-- Current form and player situations
+- South American, African, Asian football
+- Team strengths, weaknesses, current form
+- Player situations and tactical analysis
 
 RULES:
-- World Cup and major tournament matches always get a prediction
-- Use your knowledge even when local form data is missing
-- Never say you cannot predict a match
+- Always provide a prediction with reasoning
+- Use your expert knowledge even with limited data
 - Respond in valid JSON only
 - Maximum confidence: 87
-- Minimum confidence for normal matches: 55
-- For World Cup/UCL finals: always provide a pick
+- Minimum confidence: 55
+- Be honest about uncertainty
 """
+
+
+# Specific major tournament competitions only
+# Very precise - not generic terms
+MAJOR_COMP_KEYWORDS = [
+    "world championship",
+    "fifa world cup",
+    "world cup 2026",
+    "uefa champions league",
+    "champions league",
+    "olympic games football",
+    "copa america",
+    "africa cup of nations",
+    "afcon",
+    "european championship",
+    "euros 2026",
+    "euros 2024",
+    "fifa club world cup",
+    "fifa intercontinental",
+    "copa libertadores",
+    "europa league",
+    "conference league",
+    "finalissima",
+]
 
 
 class FootballPredictor:
     """
     AI prediction engine.
-    Major tournament aware.
-    Uses multiple Groq models as fallback.
+    Uses Groq with fallback models.
+    Detects major tournaments accurately.
     """
 
     def __init__(self):
@@ -53,13 +75,21 @@ class FootballPredictor:
         self.fast     = GROQ_FAST_MODEL
 
     def is_major(self, match: dict) -> bool:
-        """Check if match is a major tournament."""
-        comp = (
-            match.get("competition_name", "")
-            + " "
-            + match.get("competition_code", "")
+        """
+        Check if this is a genuine major tournament.
+
+        Very specific matching to avoid false positives.
+        Lebanese Premier League should NOT be major.
+        Only actual World Cup, UCL, Copa America etc.
+        """
+        comp = match.get(
+            "competition_name", ""
         ).lower()
-        return any(t in comp for t in MAJOR_TOURNAMENTS)
+
+        return any(
+            keyword in comp
+            for keyword in MAJOR_COMP_KEYWORDS
+        )
 
     def analyse(self, match: dict) -> dict:
         """Analyse one match and return prediction."""
@@ -95,13 +125,7 @@ class FootballPredictor:
                 result = json.loads(raw)
                 conf   = result.get("confidence", 0)
 
-                # Lower threshold for major tournaments
-                min_conf = (
-                    45 if is_major_match
-                    else MIN_CONFIDENCE
-                )
-
-                if conf < min_conf:
+                if conf < MIN_CONFIDENCE:
                     return None
 
                 result["tier"]       = self._tier(conf)
@@ -110,7 +134,6 @@ class FootballPredictor:
                 return result
 
             except json.JSONDecodeError:
-                print(f"   JSON error with {model}")
                 continue
             except Exception as e:
                 err = str(e)
@@ -129,23 +152,24 @@ class FootballPredictor:
     def analyse_all(self, matches: list) -> list:
         """
         Analyse all matches.
-        Major tournaments always included.
-        Regular matches filtered by confidence.
+        Shows major tournament badge correctly.
         """
-        predictions  = []
-        major_preds  = []
+        predictions = []
+        major_preds = []
 
         for i, m in enumerate(matches):
-            home      = m.get("home_team", "?")
-            away      = m.get("away_team", "?")
-            comp      = m.get("competition_name", "?")
-            is_maj    = self.is_major(m)
-            maj_label = "🌍 MAJOR" if is_maj else ""
+            home   = m.get("home_team", "?")
+            away   = m.get("away_team", "?")
+            comp   = m.get("competition_name", "?")
+            is_maj = self.is_major(m)
+
+            # Only show 🌍 for genuine major tournaments
+            maj_label = " 🌍 MAJOR" if is_maj else ""
 
             print(
                 f"   🤖 [{i+1}/{len(matches)}] "
                 f"{home} vs {away} "
-                f"({comp}) {maj_label}"
+                f"({comp}){maj_label}"
             )
 
             pred = self.analyse(m)
@@ -164,7 +188,7 @@ class FootballPredictor:
             reverse=True,
         )
 
-        # Major tournament picks ALWAYS come first
+        # Major tournament picks always come first
         return major_preds + predictions
 
     def rank_predictions(
@@ -204,60 +228,49 @@ class FootballPredictor:
         h2h  = m.get("h2h", {})
         wx   = m.get("weather", {})
 
-        major_instruction = ""
+        major_note = ""
         if is_major:
-            major_instruction = f"""
-IMPORTANT: This is a MAJOR TOURNAMENT match
-({comp}).
-You MUST provide a prediction.
-Use your expert knowledge of these teams
-and this competition even if form data
-is limited or missing.
-This is a high-profile match that followers
-expect to see covered.
+            major_note = f"""
+IMPORTANT: This is a major tournament match ({comp}).
+Use your full expert knowledge of these teams.
+This is a high profile match followers care about.
 """
 
         return f"""
-{major_instruction}
+{major_note}
 Analyse this football match:
 
 MATCH: {home} vs {away}
 COMPETITION: {comp}
 
-HOME TEAM ({home}):
-Form last 10: {hf.get("form_string", "Unknown")}
+HOME ({home}):
+Form: {hf.get("form_string", "Unknown")}
 Win rate: {hf.get("win_rate", "Unknown")}%
 Goals scored avg: {hf.get("goals_for_avg", "Unknown")}
 Goals conceded avg: {hf.get("goals_against_avg", "Unknown")}
 News: {m.get("home_news_note", "Nothing significant")}
 
-AWAY TEAM ({away}):
-Form last 10: {af.get("form_string", "Unknown")}
+AWAY ({away}):
+Form: {af.get("form_string", "Unknown")}
 Win rate: {af.get("win_rate", "Unknown")}%
 Goals scored avg: {af.get("goals_for_avg", "Unknown")}
 Goals conceded avg: {af.get("goals_against_avg", "Unknown")}
 News: {m.get("away_news_note", "Nothing significant")}
 
-HEAD TO HEAD:
+H2H:
 Home wins: {h2h.get("home_wins", "Unknown")}
 Away wins: {h2h.get("away_wins", "Unknown")}
 Draws: {h2h.get("draws", "Unknown")}
-Average goals: {h2h.get("avg_goals", "Unknown")}
+Avg goals: {h2h.get("avg_goals", "Unknown")}
 
-CONDITIONS:
-Weather: {wx.get("description", "Normal conditions")}
-Weather impact: {wx.get("impact", 0)}
+Weather: {wx.get("description", "Normal")}
 
-Respond in this exact JSON format:
+Return JSON:
 {{
   "pick": "Home Win" or "Away Win" or "Draw" or "Over 2.5" or "Under 2.5" or "BTTS",
-  "pick_short": "use actual team name e.g. France Win",
+  "pick_short": "actual team name e.g. France Win",
   "confidence": 72,
-  "reasoning": [
-    "reason 1",
-    "reason 2",
-    "reason 3"
-  ],
+  "reasoning": ["reason 1", "reason 2", "reason 3"],
   "risk": "main risk to this prediction",
   "predicted_score": "2-1",
   "avoid": false
