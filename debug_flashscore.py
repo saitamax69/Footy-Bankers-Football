@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 import time
 
 key     = os.environ.get("SPORTDB_API_KEY", "")
@@ -10,8 +9,6 @@ headers = {"X-API-Key": key}
 
 def get(endpoint):
     url = f"{BASE}{endpoint}"
-    if endpoint.startswith("/api/"):
-        url = f"{BASE}{endpoint[4:]}"
     try:
         r = requests.get(
             url, headers=headers, timeout=15
@@ -20,49 +17,77 @@ def get(endpoint):
             return r.json()
         return None
     except Exception as e:
-        print(f"Error: {e}")
         return None
 
 
-print("FINDING COMPETITION IDS FOR ALL LEAGUES\n")
+print("FINDING SPAIN GERMANY ITALY FRANCE BRAZIL IDs")
+print("="*60)
+
+countries = get("/flashscore/football")
+if not countries:
+    print("Failed to get countries")
+    exit()
+
+print(f"Total countries: {len(countries)}\n")
 
 targets = [
-    ("world",       8),
-    ("england",     198),
-    ("spain",       45),
-    ("germany",     78),
-    ("italy",       102),
-    ("france",      74),
-    ("netherlands", 130),
-    ("portugal",    155),
-    ("brazil",      32),
-    ("argentina",   11),
-    ("turkey",      186),
-    ("belgium",     24),
-    ("scotland",    166),
-    ("usa",         200),
-    ("mexico",      119),
+    "spain", "germany", "italy", "france",
+    "brazil", "argentina", "netherlands",
+    "turkey", "belgium", "scotland",
+    "mexico", "greece", "ukraine",
+    "russia", "switzerland", "sweden",
+    "denmark", "norway", "croatia",
+    "serbia", "poland", "czechia",
+    "czech-republic", "romania",
+    "south-africa", "nigeria", "ghana",
+    "egypt", "morocco", "japan",
+    "south-korea", "china", "india",
+    "saudi-arabia", "australia",
 ]
 
-for slug, cid in targets:
-    print(f"\n{'='*50}")
-    print(f"COUNTRY: {slug} (id:{cid})")
-    print(f"{'='*50}")
+found = {}
+for c in countries:
+    slug = c.get("slug", "").lower()
+    name = c.get("name", "").lower()
+    cid  = c.get("id")
 
-    comps = get(f"/flashscore/football/{slug}:{cid}")
+    for t in targets:
+        if t in slug or t in name:
+            found[t] = {
+                "name": c.get("name"),
+                "id":   cid,
+                "slug": c.get("slug"),
+            }
+            break
+
+print("FOUND COUNTRIES:")
+for t, info in sorted(found.items()):
+    print(
+        f"  {t}: {info['name']} "
+        f"(id:{info['id']}, slug:{info['slug']})"
+    )
+
+print("\nNOT FOUND:")
+for t in targets:
+    if t not in found:
+        print(f"  {t}")
+
+print("\nCHECKING COMPETITIONS FOR FOUND COUNTRIES:")
+for t, info in sorted(found.items()):
+    slug = info["slug"]
+    cid  = info["id"]
+    name = info["name"]
+
+    comps = get(
+        f"/flashscore/football/{slug}:{cid}"
+    )
     if comps and isinstance(comps, list):
-        for comp in comps[:15]:
-            cname = comp.get("name", "?")
-            cslug = comp.get("slug", "?")
-            cid2  = comp.get("id", "?")
-            link  = comp.get("link", "?")
-            print(f"  NAME: {cname}")
-            print(f"  SLUG: {cslug}")
-            print(f"  ID:   {cid2}")
-            print(f"  LINK: {link}")
-            print()
-    else:
-        print(f"  No competitions found")
-    time.sleep(0.5)
+        print(f"\n  {name} ({slug}:{cid}):")
+        for comp in comps[:5]:
+            print(
+                f"    {comp.get('name')} "
+                f"id:{comp.get('id')}"
+            )
+    time.sleep(0.3)
 
 print("\nDONE")
