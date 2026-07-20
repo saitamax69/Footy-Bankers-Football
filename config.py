@@ -16,7 +16,8 @@ FACEBOOK_HANDLE = "Footy Bankers Football"
 TWITTER_HANDLE  = "@FootyBankersFC"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# AFFILIATE
+# AFFILIATE - Only used in Telegram
+# Never post directly on Facebook
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AFFILIATE_LINK = "https://stake.com/?c=stakesoccer24"
 AFFILIATE_NAME = "Stake"
@@ -24,7 +25,9 @@ AFFILIATE_NAME = "Stake"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DISCLAIMER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DISCLAIMER = "18+ | Gamble Responsibly | begambleaware.org"
+DISCLAIMER = (
+    "18+ | Gamble Responsibly | begambleaware.org"
+)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TIMEZONE
@@ -47,7 +50,7 @@ STRONG_MIN = 65
 VALUE_MIN  = 55
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GROQ MODELS - Verified Working July 2026
+# GROQ MODELS - Verified July 2026
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 GROQ_PRIMARY_MODEL  = "llama-3.3-70b-versatile"
 GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
@@ -89,29 +92,76 @@ DATA_SOURCES = [
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAJOR TOURNAMENTS
-# AI will always cover these regardless of data
+# Very specific - only genuine top competitions
+# DO NOT include generic terms like "premier league"
+# as this matches every country's top league
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAJOR_TOURNAMENTS = [
-    "world cup",
+    # World Cup - must be specific
+    "world championship",
     "fifa world cup",
-    "worldcup",
-    "champions league",
+    "world cup 2026",
+    # UEFA competitions
     "uefa champions league",
+    "champions league",
     "europa league",
-    "euros",
-    "euro 2024",
-    "euro 2026",
+    "conference league",
+    # Major international tournaments
     "copa america",
-    "africa cup",
+    "africa cup of nations",
     "afcon",
+    "euros 2024",
+    "euros 2026",
+    "european championship",
+    # FIFA events
+    "olympic games football",
+    "fifa club world cup",
+    "fifa intercontinental cup",
+    "copa libertadores",
+    # Specific league names only
+    "premier league england",
+    "english premier league",
+    "la liga spain",
+    "spanish la liga",
+    "german bundesliga",
+    "italian serie a",
+    "french ligue 1",
+]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TOP COMPETITIONS
+# Used for priority sorting
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOP_COMPETITIONS = [
+    "world championship",
+    "champions league",
+    "europa league",
+    "copa america",
+    "africa cup of nations",
+    "european championship",
+    "copa libertadores",
     "premier league",
+    "laliga",
     "la liga",
     "bundesliga",
     "serie a",
     "ligue 1",
-    "fa cup",
-    "carabao cup",
-    "conference league",
+    "eredivisie",
+    "primeira liga",
+    "liga portugal",
+    "scottish premiership",
+    "super lig",
+    "jupiler pro",
+    "brasileirao",
+    "liga profesional",
+    "liga mx",
+    "mls",
+    "danish superliga",
+    "allsvenskan",
+    "eliteserien",
+    "j1 league",
+    "k league",
+    "saudi professional",
 ]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
