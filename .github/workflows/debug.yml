@@ -24,3 +24,7 @@ jobs:
         env:
           SPORTDB_API_KEY: ${{ secrets.SPORTDB_API_KEY }}
         run: python debug_flashscore.py
+      - name: Find competition IDs
+        env:
+          SPORTDB_API_KEY: ${{ secrets.SPORTDB_API_KEY }}
+        run: python debug_flashscore.py
