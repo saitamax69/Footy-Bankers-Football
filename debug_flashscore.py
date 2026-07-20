@@ -2,6 +2,69 @@
 Debug script to understand Flashscore API structure.
 Run once to see what data we get.
 
+print("\n[4b] GET /flashscore/football/matches")
+data = get("/flashscore/football/matches")
+if data:
+    print(f"  Type: {type(data).__name__}")
+    if isinstance(data, list):
+        print(f"  Count: {len(data)}")
+        if data:
+            print(f"  ALL KEYS in first match:")
+            print(f"  {list(data[0].keys())}")
+            print(f"  Full first match:")
+            print(json.dumps(data[0], indent=2)[:800])
+    elif isinstance(data, dict):
+        print(f"  Keys: {list(data.keys())}")
+        # Try to find matches inside
+        for k, v in data.items():
+            if isinstance(v, list) and v:
+                print(f"  Found list under '{k}': {len(v)} items")
+                print(f"  First item keys: {list(v[0].keys()) if isinstance(v[0], dict) else v[0]}")
+
+print("\n[4c] GET /flashscore/football/today")
+data = get("/flashscore/football/today")
+if data:
+    print(f"  Type: {type(data).__name__}")
+    if isinstance(data, list):
+        print(f"  Count: {len(data)}")
+        if data:
+            print(f"  ALL KEYS in first match:")
+            print(f"  {list(data[0].keys())}")
+            print(f"  Full first match:")
+            print(json.dumps(data[0], indent=2)[:800])
+    elif isinstance(data, dict):
+        print(f"  Keys: {list(data.keys())}")
+        for k, v in data.items():
+            if isinstance(v, list) and v:
+                print(f"  Found list under '{k}': {len(v)} items")
+                print(f"  First item keys: {list(v[0].keys()) if isinstance(v[0], dict) else v[0]}")
+
+print("\n[4d] GET /flashscore/football/world:8")
+data = get("/flashscore/football/world:8")
+if data:
+    print(f"  Type: {type(data).__name__}")
+    if isinstance(data, list):
+        print(f"  Count: {len(data)} competitions")
+        for comp in data[:5]:
+            print(f"  Comp: {json.dumps(comp)}")
+
+        # Follow first competition link
+        if data:
+            first_link = data[0].get("link", "")
+            if first_link:
+                endpoint = first_link.replace("/api", "")
+                print(f"\n  Following link: {first_link}")
+                comp_data = get(endpoint)
+                if comp_data:
+                    print(f"  Comp data type: {type(comp_data).__name__}")
+                    if isinstance(comp_data, list):
+                        print(f"  Match count: {len(comp_data)}")
+                        if comp_data:
+                            print(f"  Match keys: {list(comp_data[0].keys())}")
+                            print(f"  First match: {json.dumps(comp_data[0])[:500]}")
+                    elif isinstance(comp_data, dict):
+                        print(f"  Keys: {list(comp_data.keys())}")
+                        
 python debug_flashscore.py
 """
 
