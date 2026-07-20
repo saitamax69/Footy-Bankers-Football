@@ -6,21 +6,33 @@ from config import (
     TELEGRAM_LINK,
     AFFILIATE_LINK,
     FACEBOOK_PICKS,
-    LEAGUES,
 )
 
 
 class PostFormatter:
     """
     Formats predictions into posts.
-    Includes affiliate links in all posts.
-    Includes Telegram link in Facebook posts.
-    Major tournament picks marked clearly.
+
+    TELEGRAM:
+    → Full predictions with affiliate link
+    → 10-20 picks with full analysis
+    → Stake link in every post (safe on Telegram)
+
+    FACEBOOK:
+    → Top 5 picks only
+    → NO direct Stake/betting link (protects page)
+    → Telegram link to drive traffic
+    → Looks like media company not spam
     """
 
     def __init__(self, personality_engine):
         self.pe = personality_engine
         self.tz = pytz.timezone("Europe/London")
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # TELEGRAM POSTS
+    # Full predictions + affiliate link
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     def telegram_morning(
         self,
@@ -50,12 +62,16 @@ class PostFormatter:
             if p.get("avoid")
         ]
 
+        # Human opening paragraph
         opening = self.pe.write_opening(accuracy, day)
 
         msg  = "⚽ *FOOTY BANKERS FOOTBALL*\n"
-        msg += f"📅 {day} {date} │ {time_str} UK\n\n"
+        msg += (
+            f"📅 {day} {date} │ {time_str} UK\n\n"
+        )
         msg += f"_{self._e(opening)}_\n\n"
 
+        # Stats bar
         streak  = accuracy.get("streak", 0)
         overall = accuracy.get("overall", "")
         total   = len(predictions)
@@ -73,27 +89,27 @@ class PostFormatter:
 
         msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        # Banker picks
+        # Banker picks section
         if bankers:
             msg += "🔒 *BANKER PICKS*\n\n"
             for i, p in enumerate(bankers, 1):
-                msg += self._format_pick(p, i)
+                msg += self._format_pick_tg(p, i)
 
-        # Strong picks
+        # Strong picks section
         if strong:
             msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             msg += "💪 *STRONG PICKS*\n\n"
             start = len(bankers) + 1
             for i, p in enumerate(strong, start):
-                msg += self._format_pick(p, i)
+                msg += self._format_pick_tg(p, i)
 
-        # Value picks
+        # Value picks section
         if value:
             msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             msg += "🎲 *VALUE PICKS*\n\n"
             start = len(bankers) + len(strong) + 1
             for i, p in enumerate(value, start):
-                msg += self._format_pick(p, i)
+                msg += self._format_pick_tg(p, i)
 
         # Avoid section
         if avoids:
@@ -109,7 +125,7 @@ class PostFormatter:
                 msg += f"❌ *{h} vs {a}*\n"
                 msg += f"_{r}_\n\n"
 
-        # Affiliate link
+        # Affiliate link - safe on Telegram
         msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         msg += (
             f"🎰 *Place your bets:*\n"
@@ -119,87 +135,6 @@ class PostFormatter:
 
         msg += f"_{self._e(DISCLAIMER)}_\n"
         msg += f"*{self._e(BRAND_NAME)}* ⚽🔒"
-
-        return msg
-
-    def facebook_morning(
-        self,
-        predictions: list,
-        accuracy: dict,
-    ) -> str:
-        """Clean Facebook post with top 5 picks."""
-        now  = datetime.now(self.tz)
-        day  = now.strftime("%A")
-        date = now.strftime("%d %B %Y")
-
-        top5    = predictions[:FACEBOOK_PICKS]
-        streak  = accuracy.get("streak", 0)
-        overall = accuracy.get("overall", "")
-
-        msg  = "⚽ Footy Bankers Football\n"
-        msg += f"📅 {day} {date}\n\n"
-
-        if streak > 3:
-            msg += (
-                f"🔥 {streak} correct in a row\\. "
-                f"Today's picks 👇\n\n"
-            )
-        else:
-            msg += "Today's top picks 🔒\n\n"
-
-        msg += "━━━━━━━━━━━━━━━━━━━\n\n"
-
-        emojis     = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"]
-        tier_icons = {
-            "BANKER": "🔒",
-            "STRONG": "💪",
-            "VALUE":  "🎲",
-        }
-
-        for i, pred in enumerate(top5):
-            m        = pred.get("match_data", {})
-            home     = m.get("home_team", "Home")
-            away     = m.get("away_team", "Away")
-            comp     = m.get("competition_name", "")
-            kick     = m.get("kickoff_uk", "TBC")
-            pick     = pred.get("pick_short", "")
-            conf     = pred.get("confidence", 0)
-            tier     = pred.get("tier", "VALUE")
-            icon     = tier_icons.get(tier, "⚽")
-            is_major = pred.get("is_major", False)
-            major_tag = " 🌍" if is_major else ""
-
-            msg += (
-                f"{emojis[i]} {icon} "
-                f"{pick}{major_tag}\n"
-            )
-            msg += f"   {comp}\n"
-            msg += f"   {home} vs {away}\n"
-            msg += (
-                f"   ⏰ {kick} │ 📊 {conf}%\n\n"
-            )
-
-        msg += "━━━━━━━━━━━━━━━━━━━\n\n"
-
-        if overall and overall != "Building...":
-            msg += f"📈 Accuracy: {overall}\n"
-
-        if streak > 3:
-            msg += f"🔥 Streak: {streak} correct\n"
-
-        # Telegram link - drive traffic there
-        msg += (
-            f"\n💬 Full analysis + all picks:\n"
-            f"👉 {TELEGRAM_LINK}\n\n"
-        )
-
-        # Affiliate link
-        msg += (
-            f"🎰 Place your bets:\n"
-            f"stake.com/?c=stakesoccer24\n\n"
-        )
-
-        msg += DISCLAIMER
 
         return msg
 
@@ -243,10 +178,10 @@ class PostFormatter:
         msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         for r in results:
-            m    = r.get("match_data", {})
-            home = self._e(m.get("home_team", ""))
-            away = self._e(m.get("away_team", ""))
-            pick = self._e(
+            m     = r.get("match_data", {})
+            home  = self._e(m.get("home_team", ""))
+            away  = self._e(m.get("away_team", ""))
+            pick  = self._e(
                 r.get("pick_short", r.get("pick", ""))
             )
             score = self._e(
@@ -264,20 +199,22 @@ class PostFormatter:
         streak  = accuracy.get("streak", 0)
         overall = accuracy.get("overall", "")
 
-        if overall:
+        if overall and overall != "Building...":
             msg += (
-                f"📈 Overall: *{self._e(overall)}*\n"
+                f"📈 Overall: "
+                f"*{self._e(overall)}*\n"
             )
         if streak > 0:
             msg += (
-                f"🔥 Streak: *{streak} correct*\n"
+                f"🔥 Streak: "
+                f"*{streak} correct*\n"
             )
 
         msg += "\nSee you tomorrow 💪⚽\n\n"
 
-        # Affiliate link in results
+        # Affiliate link in results - safe on Telegram
         msg += (
-            f"🎰 [stake\\.com/\\?c\\=stakesoccer24]"
+            f"🎰 [Place your bets]"
             f"({AFFILIATE_LINK})\n\n"
         )
 
@@ -286,12 +223,120 @@ class PostFormatter:
 
         return msg
 
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # FACEBOOK POSTS
+    # NO direct betting links - protects page
+    # Drive traffic to Telegram instead
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def facebook_morning(
+        self,
+        predictions: list,
+        accuracy: dict,
+    ) -> str:
+        """
+        Clean Facebook morning post.
+
+        IMPORTANT: No direct Stake/betting link here.
+        Facebook will shadowban and eventually
+        delete the page if we post betting links.
+
+        Strategy: Drive people to Telegram.
+        Telegram is where the Stake link lives.
+        """
+        now  = datetime.now(self.tz)
+        day  = now.strftime("%A")
+        date = now.strftime("%d %B %Y")
+
+        top5    = predictions[:FACEBOOK_PICKS]
+        streak  = accuracy.get("streak", 0)
+        overall = accuracy.get("overall", "")
+        total   = len(predictions)
+
+        msg = "⚽ Footy Bankers Football\n"
+        msg += f"📅 {day} {date}\n\n"
+
+        # Opening hook
+        if streak > 5:
+            msg += (
+                f"🔥 {streak} correct in a row. "
+                f"Today's picks 👇\n\n"
+            )
+        elif overall and overall != "Building...":
+            msg += (
+                f"📈 {overall} accuracy. "
+                f"Here are today's top picks 🔒\n\n"
+            )
+        else:
+            msg += "Today's top picks are in 🔒\n\n"
+
+        msg += "━━━━━━━━━━━━━━━━━━━\n\n"
+
+        emojis     = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"]
+        tier_icons = {
+            "BANKER": "🔒",
+            "STRONG": "💪",
+            "VALUE":  "🎲",
+        }
+
+        for i, pred in enumerate(top5):
+            m        = pred.get("match_data", {})
+            home     = m.get("home_team", "Home")
+            away     = m.get("away_team", "Away")
+            comp     = m.get("competition_name", "")
+            kick     = m.get("kickoff_uk", "TBC")
+            pick     = pred.get("pick_short", "")
+            conf     = pred.get("confidence", 0)
+            tier     = pred.get("tier", "VALUE")
+            icon     = tier_icons.get(tier, "⚽")
+            is_major = pred.get("is_major", False)
+
+            # World Cup badge
+            major_tag = " 🌍 MAJOR" if is_major else ""
+
+            msg += f"{emojis[i]} {icon} {pick}{major_tag}\n"
+            msg += f"   {comp}\n"
+            msg += f"   {home} vs {away}\n"
+            msg += f"   ⏰ {kick} │ 📊 {conf}%\n\n"
+
+        msg += "━━━━━━━━━━━━━━━━━━━\n\n"
+
+        # Show accuracy if we have it
+        if overall and overall != "Building...":
+            msg += f"📈 Overall accuracy: {overall}\n"
+
+        if streak > 3:
+            msg += f"🔥 Current streak: {streak} correct\n"
+
+        # Total picks teaser
+        if total > FACEBOOK_PICKS:
+            remaining = total - FACEBOOK_PICKS
+            msg += (
+                f"\n📊 Plus {remaining} more picks "
+                f"on our Telegram 👇\n"
+            )
+
+        # Strong CTA to Telegram (where Stake link lives)
+        msg += (
+            f"\n💬 Full breakdown + all picks:\n"
+            f"👉 {TELEGRAM_LINK}\n\n"
+        )
+
+        # Safe disclaimer only - no betting links
+        msg += DISCLAIMER
+
+        return msg
+
     def facebook_results(
         self,
         results: list,
         accuracy: dict,
     ) -> str:
-        """Evening results post for Facebook."""
+        """
+        Facebook results post.
+        No direct betting link.
+        Drive to Telegram for full analysis.
+        """
         now  = datetime.now(self.tz)
         date = now.strftime("%A %d %B %Y")
 
@@ -305,71 +350,97 @@ class PostFormatter:
             if total else 0
         )
 
+        # Result verdict
+        if pct >= 80:
+            verdict = "Brilliant day 🔥"
+            emoji   = "🔥"
+        elif pct >= 65:
+            verdict = "Good day"
+            emoji   = "✅"
+        elif pct >= 50:
+            verdict = "Decent day"
+            emoji   = "👍"
+        elif pct >= 35:
+            verdict = "Tough day"
+            emoji   = "⚠️"
+        else:
+            verdict = "Difficult day"
+            emoji   = "❌"
+
         msg  = "📊 Footy Bankers Football | Results\n"
         msg += f"📅 {date}\n\n"
-        msg += f"Today: {n}/{total} correct ({pct}%)\n\n"
+        msg += f"{emoji} {verdict}: {n}/{total} correct ({pct}%)\n\n"
         msg += "━━━━━━━━━━━━━━━━━━━\n\n"
 
+        # Show up to 5 results
         for r in results[:5]:
-            m    = r.get("match_data", {})
-            home = m.get("home_team", "")
-            away = m.get("away_team", "")
-            pick = r.get("pick_short", "")
-            scr  = r.get("actual_score", "?-?")
-            ok   = r.get("correct", False)
-            em   = "✅" if ok else "❌"
+            m     = r.get("match_data", {})
+            home  = m.get("home_team", "")
+            away  = m.get("away_team", "")
+            pick  = r.get("pick_short", "")
+            score = r.get("actual_score", "?-?")
+            ok    = r.get("correct", False)
+            em    = "✅" if ok else "❌"
 
             msg += f"{em} {home} vs {away}\n"
-            msg += f"   {pick} │ {scr}\n\n"
+            msg += f"   {pick} │ Score: {score}\n\n"
 
         msg += "━━━━━━━━━━━━━━━━━━━\n\n"
 
+        # Accuracy stats
         overall = accuracy.get("overall", "")
         streak  = accuracy.get("streak", 0)
 
-        if overall:
-            msg += f"📈 Overall: {overall}\n"
+        if overall and overall != "Building...":
+            msg += f"📈 Overall accuracy: {overall}\n"
+
         if streak > 3:
             msg += f"🔥 Streak: {streak} correct\n"
 
-        # Telegram link
+        # Drive to Telegram
         msg += (
-            f"\n💬 Full analysis:\n"
+            f"\n📊 Full results + tomorrow's picks:\n"
             f"👉 {TELEGRAM_LINK}\n\n"
         )
 
-        # Affiliate link
-        msg += (
-            f"🎰 stake.com/?c=stakesoccer24\n\n"
-        )
-
+        # Safe disclaimer only
         msg += DISCLAIMER
+
         return msg
 
     def no_fixtures_post(self) -> tuple:
-        """Post for days with no fixtures."""
+        """Posts for days with no fixtures."""
+
+        # Telegram - can have affiliate link
         tg = (
             "⚽ *FOOTY BANKERS FOOTBALL*\n\n"
             "_No major fixtures today\\._\n\n"
             "We will be back tomorrow with "
             "the full breakdown\\! 🔒\n\n"
-            f"🎰 [Place your bets]"
+            f"🎰 [Place your bets today]"
             f"({AFFILIATE_LINK})\n\n"
             f"_{self._e(DISCLAIMER)}_\n"
             f"*{self._e(BRAND_NAME)}* ⚽🔒"
         )
+
+        # Facebook - no direct betting link
         fb = (
             f"⚽ Footy Bankers Football\n\n"
             f"No major fixtures today.\n\n"
             f"Back tomorrow with full picks 🔒\n\n"
-            f"Full analysis on Telegram:\n"
+            f"In the meantime check out our\n"
+            f"full analysis on Telegram:\n"
             f"👉 {TELEGRAM_LINK}\n\n"
-            f"🎰 stake.com/?c=stakesoccer24\n\n"
             f"{DISCLAIMER}"
         )
+
         return tg, fb
 
-    def _format_pick(
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # HELPERS
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _format_pick_tg(
         self, pred: dict, num: int
     ) -> str:
         """Format single pick for Telegram."""
@@ -388,11 +459,13 @@ class PostFormatter:
             m.get("competition_code", "")
         )
 
+        # Major tournament badge
         major_badge = " 🌍" if is_major else ""
 
         text  = (
             f"{flag} {self._e(comp)}"
-            f"{major_badge} │ {self._e(kick)}\n"
+            f"{major_badge} │ "
+            f"{self._e(kick)}\n"
         )
         text += (
             f"*{self._e(home)} vs "
@@ -429,7 +502,7 @@ class PostFormatter:
         return text
 
     def _flag(self, code: str) -> str:
-        """Get competition flag emoji."""
+        """Competition flag emoji."""
         flags = {
             "PL":  "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
             "PD":  "🇪🇸",
@@ -445,5 +518,7 @@ class PostFormatter:
             "DED": "🇳🇱",
             "BSA": "🇧🇷",
             "MLS": "🇺🇸",
+            "FAC": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+            "COL": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
         }
         return flags.get(code, "⚽")
