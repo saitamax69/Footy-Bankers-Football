@@ -11,33 +11,21 @@ class SportDBApi:
     """
     SportDB API - Flashscore integration.
 
-    CONFIRMED WORKING:
-    - /flashscore/football/live (115+ matches)
-    - /flashscore/football/{slug}:{id} (competitions)
-    - {competition_link} (comp details with live/seasons)
-    - {competition_link}/live (live matches for comp)
-    - {competition_link}/{season}/fixtures (upcoming)
-
-    CONFIRMED FIELD NAMES:
-    homeFirstName / awayFirstName = team names
-    tournamentName = competition name
-    startDateTimeUtc = kickoff (ISO format)
-    eventStage = status
-    eventId = match ID
-
-    VERIFIED COMPETITION LINKS:
-    World Cup: world:8/world-championship:lvUBR5F8
-    Premier League: england:198/premier-league:dYlOSQOD
-    Championship: england:198/championship:2DSCa5fE
-    Liga Portugal: portugal:155/liga-portugal:UmMRoGzp
-    MLS: usa:200/mls:CQv5qrFt
+    All competition IDs verified via debug script.
+    Uses /live endpoint as primary source.
+    Uses competition-specific endpoints as backup.
     """
 
     BASE_URL = "https://api.sportdb.dev/api"
 
-    # Verified competition links from debug output
+    # ALL VERIFIED COMPETITION LINKS
+    # Format: (country_path, comp_path, display_name, tier)
+    # Tier 1 = World Cup/UCL level
+    # Tier 2 = Top domestic leagues
+    # Tier 3 = Secondary leagues
     VERIFIED_COMPETITIONS = [
-        # World level - HIGHEST PRIORITY
+
+        # ── WORLD LEVEL ──────────────────────────
         (
             "world:8",
             "world-championship:lvUBR5F8",
@@ -68,7 +56,14 @@ class SportDBApi:
             "World Cup U20",
             2,
         ),
-        # England - verified IDs
+        (
+            "world:8",
+            "world-cup-u17:INHpQ3aR",
+            "World Cup U17",
+            3,
+        ),
+
+        # ── ENGLAND ──────────────────────────────
         (
             "england:198",
             "premier-league:dYlOSQOD",
@@ -99,7 +94,78 @@ class SportDBApi:
             "League One",
             3,
         ),
-        # Portugal - verified IDs
+
+        # ── SPAIN ────────────────────────────────
+        (
+            "spain:176",
+            "laliga:QVmLl54o",
+            "La Liga",
+            1,
+        ),
+        (
+            "spain:176",
+            "laliga2:vZiPmPJi",
+            "La Liga 2",
+            2,
+        ),
+
+        # ── GERMANY ──────────────────────────────
+        (
+            "germany:81",
+            "bundesliga:W6BOzpK2",
+            "Bundesliga",
+            1,
+        ),
+        (
+            "germany:81",
+            "2-bundesliga:tKH71vSe",
+            "2. Bundesliga",
+            2,
+        ),
+
+        # ── ITALY ────────────────────────────────
+        (
+            "italy:98",
+            "serie-a:COuk57Ci",
+            "Serie A",
+            1,
+        ),
+        (
+            "italy:98",
+            "serie-b:6oug4RRc",
+            "Serie B",
+            2,
+        ),
+
+        # ── FRANCE ───────────────────────────────
+        (
+            "france:77",
+            "ligue-1:KIShoMk3",
+            "Ligue 1",
+            1,
+        ),
+        (
+            "france:77",
+            "ligue-2:Y35Jer59",
+            "Ligue 2",
+            2,
+        ),
+
+        # ── NETHERLANDS ──────────────────────────
+        (
+            "netherlands:139",
+            "eredivisie:Or1bBrWD",
+            "Eredivisie",
+            2,
+        ),
+        (
+            "netherlands:139",
+            "eerste-divisie:6Nl8nagD",
+            "Eerste Divisie",
+            3,
+        ),
+
+        # ── PORTUGAL ─────────────────────────────
         (
             "portugal:155",
             "liga-portugal:UmMRoGzp",
@@ -112,7 +178,54 @@ class SportDBApi:
             "Liga Portugal 2",
             3,
         ),
-        # USA - verified IDs
+
+        # ── SCOTLAND ─────────────────────────────
+        (
+            "scotland:199",
+            "premiership:tGwiyvJ1",
+            "Scottish Premiership",
+            2,
+        ),
+
+        # ── TURKEY ───────────────────────────────
+        (
+            "turkey:191",
+            "super-lig:Opdcd08Q",
+            "Super Lig",
+            2,
+        ),
+
+        # ── BELGIUM ──────────────────────────────
+        (
+            "belgium:32",
+            "jupiler-pro-league:dG2SqPrf",
+            "Jupiler Pro League",
+            2,
+        ),
+
+        # ── BRAZIL ───────────────────────────────
+        (
+            "brazil:39",
+            "serie-a-betano:Yq4hUnzQ",
+            "Brasileirao Serie A",
+            2,
+        ),
+        (
+            "brazil:39",
+            "serie-b:vRtLP6rs",
+            "Brasileirao Serie B",
+            3,
+        ),
+
+        # ── ARGENTINA ────────────────────────────
+        (
+            "argentina:22",
+            "liga-profesional:naYhNOaA",
+            "Liga Profesional Argentina",
+            2,
+        ),
+
+        # ── USA ──────────────────────────────────
         (
             "usa:200",
             "mls:CQv5qrFt",
@@ -125,18 +238,199 @@ class SportDBApi:
             "USL Championship",
             3,
         ),
+
+        # ── MEXICO ───────────────────────────────
+        (
+            "mexico:128",
+            "liga-mx:bm2Vlsfl",
+            "Liga MX",
+            2,
+        ),
+
+        # ── DENMARK ──────────────────────────────
+        (
+            "denmark:63",
+            "superliga:O6W7GIaF",
+            "Danish Superliga",
+            2,
+        ),
+
+        # ── SWEDEN ───────────────────────────────
+        (
+            "sweden:181",
+            "allsvenskan:nXxWpLmT",
+            "Allsvenskan",
+            2,
+        ),
+
+        # ── NORWAY ───────────────────────────────
+        (
+            "norway:145",
+            "eliteserien:GOvB22xg",
+            "Eliteserien",
+            2,
+        ),
+
+        # ── SWITZERLAND ──────────────────────────
+        (
+            "switzerland:182",
+            "super-league:KAjTCI1l",
+            "Swiss Super League",
+            2,
+        ),
+
+        # ── GREECE ───────────────────────────────
+        (
+            "greece:83",
+            "super-league:d2pwJFHI",
+            "Super League Greece",
+            2,
+        ),
+
+        # ── RUSSIA ───────────────────────────────
+        (
+            "russia:158",
+            "premier-league:YacqHHdS",
+            "Russian Premier League",
+            2,
+        ),
+
+        # ── UKRAINE ──────────────────────────────
+        (
+            "ukraine:195",
+            "premier-league:Myjs3vp6",
+            "Ukrainian Premier League",
+            2,
+        ),
+
+        # ── SAUDI ARABIA ─────────────────────────
+        (
+            "saudi-arabia:165",
+            "saudi-professional-league:tUxUbLR2",
+            "Saudi Pro League",
+            2,
+        ),
+
+        # ── JAPAN ────────────────────────────────
+        (
+            "japan:100",
+            "j1-league:pAq4eRQ9",
+            "J1 League",
+            2,
+        ),
+
+        # ── SOUTH KOREA ──────────────────────────
+        (
+            "south-korea:106",
+            "k-league-1:0IDCJLlH",
+            "K League 1",
+            2,
+        ),
+
+        # ── CHINA ────────────────────────────────
+        (
+            "china:52",
+            "super-league:nc9yRmcn",
+            "Chinese Super League",
+            2,
+        ),
+
+        # ── POLAND ───────────────────────────────
+        (
+            "poland:154",
+            "ekstraklasa:lrMHUHDc",
+            "Ekstraklasa",
+            2,
+        ),
+
+        # ── CROATIA ──────────────────────────────
+        (
+            "croatia:59",
+            "hnl:nqMxclRN",
+            "HNL Croatia",
+            2,
+        ),
+
+        # ── SERBIA ───────────────────────────────
+        (
+            "serbia:167",
+            "mozzart-bet-super-liga:jVhkb1QE",
+            "Serbian Super Liga",
+            2,
+        ),
+
+        # ── ROMANIA ──────────────────────────────
+        (
+            "romania:157",
+            "superliga:GILi6JC9",
+            "Romanian Superliga",
+            2,
+        ),
+
+        # ── CZECH REPUBLIC ───────────────────────
+        (
+            "czech-republic:62",
+            "chance-liga:hleea1wH",
+            "Czech Chance Liga",
+            2,
+        ),
+
+        # ── SOUTH AFRICA ─────────────────────────
+        (
+            "south-africa:175",
+            "betway-premiership:WYFXQ1KH",
+            "South African Premiership",
+            3,
+        ),
+
+        # ── NIGERIA ──────────────────────────────
+        (
+            "nigeria:143",
+            "npfl:0YfyoJfj",
+            "Nigerian Premier League",
+            3,
+        ),
+
+        # ── EGYPT ────────────────────────────────
+        (
+            "egypt:69",
+            "premier-league:xbpjAGxq",
+            "Egyptian Premier League",
+            3,
+        ),
+
+        # ── MOROCCO ──────────────────────────────
+        (
+            "morocco:134",
+            "botola-pro:SWk4muv7",
+            "Botola Pro Morocco",
+            3,
+        ),
+
+        # ── INDIA ────────────────────────────────
+        (
+            "india:93",
+            "isl:rmioSrer",
+            "Indian Super League",
+            3,
+        ),
     ]
 
     def __init__(self):
         self.api_key    = os.environ.get(
             "SPORTDB_API_KEY", ""
         )
-        self.headers    = {"X-API-Key": self.api_key}
-        self.tz         = pytz.timezone("Europe/London")
+        self.headers    = {
+            "X-API-Key": self.api_key
+        }
+        self.tz         = pytz.timezone(
+            "Europe/London"
+        )
         self._last_call = 0
-        self._country_cache = {}
 
-    def _get(self, endpoint: str, delay: float = 0.3):
+    def _get(
+        self, endpoint: str, delay: float = 0.3
+    ):
         """Rate limited GET. Handles /api prefix."""
         gap = time.time() - self._last_call
         if gap < delay:
@@ -185,20 +479,18 @@ class SportDBApi:
     ) -> list:
         """
         Get all todays matches.
-
-        Step 1: Global /live endpoint (all matches now)
-        Step 2: Verified competitions live endpoint
-        Step 3: Verified competitions fixtures
-        Step 4: Discover more leagues from all countries
+        Step 1: Global /live endpoint
+        Step 2: All verified competition /live
+        Step 3: All verified competition fixtures
         """
         if not self.api_key:
-            print("   SportDB: No API key set")
+            print("   SportDB: No API key")
             return []
 
         all_matches = []
         seen        = set()
 
-        def add(matches):
+        def add(matches: list) -> int:
             added = 0
             for m in matches:
                 hn = m.get("home_team_norm", "")
@@ -212,30 +504,34 @@ class SportDBApi:
                     added += 1
             return added
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # STEP 1: Global live matches
-        # Best source - covers everything live now
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        print("   SportDB [1]: Global live matches...")
-        live = self._get("/flashscore/football/live")
+        # ── STEP 1: Global /live ──────────────────
+        print(
+            "   SportDB [1]: Global live matches..."
+        )
+        live = self._get(
+            "/flashscore/football/live"
+        )
         if live and isinstance(live, list):
             parsed = self._parse_matches(live)
             n      = add(parsed)
-            print(f"   SportDB /live: {n} matches")
-
+            print(f"   /live: {n} matches")
         time.sleep(0.5)
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # STEP 2: Verified competition live
-        # Gets matches for known competitions
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # ── STEP 2 + 3: Verified competitions ─────
         print(
-            "   SportDB [2]: Competition live feeds..."
+            "   SportDB [2]: Verified competitions..."
         )
-        for country_path, comp_path, name, tier in \
-                self.VERIFIED_COMPETITIONS:
 
-            comp_url = (
+        # Sort: tier 1 first
+        sorted_comps = sorted(
+            self.VERIFIED_COMPETITIONS,
+            key=lambda x: x[3]
+        )
+
+        for country_path, comp_path, name, tier in \
+                sorted_comps:
+
+            comp_url  = (
                 f"/flashscore/football"
                 f"/{country_path}/{comp_path}"
             )
@@ -245,6 +541,8 @@ class SportDBApi:
                not isinstance(comp_info, dict):
                 continue
 
+            total_added = 0
+
             # Live matches for this competition
             live_url = comp_info.get("live", "")
             if live_url:
@@ -253,19 +551,16 @@ class SportDBApi:
                     matches = (
                         live_data
                         if isinstance(live_data, list)
-                        else self._extract_list(live_data)
-                    )
-                    if matches:
-                        parsed = self._parse_matches(
-                            matches, name
+                        else self._extract_list(
+                            live_data
                         )
-                        n = add(parsed)
-                        if n > 0:
-                            print(
-                                f"   {name} live: +{n}"
-                            )
+                    )
+                    parsed = self._parse_matches(
+                        matches, name
+                    )
+                    total_added += add(parsed)
 
-            # Fixtures for today
+            # Fixtures for current season
             seasons = comp_info.get("seasons", [])
             if seasons and isinstance(seasons, list):
                 latest  = seasons[0]
@@ -276,179 +571,21 @@ class SportDBApi:
                         matches = self._extract_list(
                             fix_data
                         )
-                        todays = self._filter_today(
+                        todays  = self._filter_today(
                             matches
                         )
                         if todays:
                             parsed = self._parse_matches(
                                 todays, name
                             )
-                            n = add(parsed)
-                            if n > 0:
-                                print(
-                                    f"   {name} "
-                                    f"fixtures: +{n}"
-                                )
+                            total_added += add(parsed)
 
-            time.sleep(0.3)
-
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # STEP 3: Scan ALL 176 countries
-        # Find the real IDs for Spain, Germany etc
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        print("   SportDB [3]: Scanning all countries...")
-        countries = self._get("/flashscore/football")
-
-        if countries and isinstance(countries, list):
-            # Build slug to country map
-            country_map = {
-                c.get("slug", "").lower(): c
-                for c in countries
-            }
-
-            # Countries to find - use slug not ID
-            target_slugs = [
-                "spain",
-                "germany",
-                "italy",
-                "france",
-                "brazil",
-                "netherlands",
-                "argentina",
-                "turkey",
-                "belgium",
-                "scotland",
-                "mexico",
-                "greece",
-                "ukraine",
-                "russia",
-                "switzerland",
-                "austria",
-                "czech-republic",
-                "poland",
-                "croatia",
-                "serbia",
-                "denmark",
-                "sweden",
-                "norway",
-                "south-africa",
-                "nigeria",
-                "ghana",
-                "egypt",
-                "morocco",
-                "china",
-                "japan",
-                "south-korea",
-                "australia",
-                "india",
-                "saudi-arabia",
-                "uae",
-                "iran",
-            ]
-
-            checked = 0
-            for slug in target_slugs:
-                if checked >= max_countries:
-                    break
-
-                country = country_map.get(slug)
-                if not country:
-                    continue
-
-                cid  = country.get("id")
-                name = country.get("name", slug)
-
-                if not cid:
-                    continue
-
-                # Get competitions for this country
-                comps_data = self._get(
-                    f"/flashscore/football/{slug}:{cid}"
+            if total_added > 0:
+                print(
+                    f"   {name}: +{total_added}"
                 )
 
-                if not comps_data:
-                    checked += 1
-                    continue
-
-                comps = (
-                    comps_data
-                    if isinstance(comps_data, list)
-                    else []
-                )
-
-                # Check top competitions
-                for comp in comps[:3]:
-                    link      = comp.get("link", "")
-                    comp_name = comp.get("name", name)
-
-                    if not link:
-                        continue
-
-                    endpoint  = link.replace("/api", "")
-                    comp_info = self._get(endpoint)
-
-                    if not comp_info or \
-                       not isinstance(comp_info, dict):
-                        continue
-
-                    # Live matches
-                    live_url = comp_info.get("live", "")
-                    if live_url:
-                        live_data = self._get(live_url)
-                        if live_data:
-                            matches = (
-                                live_data
-                                if isinstance(
-                                    live_data, list
-                                )
-                                else self._extract_list(
-                                    live_data
-                                )
-                            )
-                            parsed = self._parse_matches(
-                                matches, comp_name
-                            )
-                            n = add(parsed)
-                            if n > 0:
-                                print(
-                                    f"   {comp_name}: "
-                                    f"+{n}"
-                                )
-
-                    # Fixtures
-                    seasons = comp_info.get(
-                        "seasons", []
-                    )
-                    if seasons:
-                        fix_url = seasons[0].get(
-                            "fixtures", ""
-                        )
-                        if fix_url:
-                            fix_data = self._get(fix_url)
-                            if fix_data:
-                                matches = \
-                                    self._extract_list(
-                                        fix_data
-                                    )
-                                todays = \
-                                    self._filter_today(
-                                        matches
-                                    )
-                                parsed = \
-                                    self._parse_matches(
-                                        todays,
-                                        comp_name
-                                    )
-                                n = add(parsed)
-                                if n > 0:
-                                    print(
-                                        f"   {comp_name}"
-                                        f" fix: +{n}"
-                                    )
-
-                    time.sleep(0.2)
-
-                checked += 1
+            time.sleep(0.25)
 
         print(
             f"   SportDB TOTAL: "
@@ -457,7 +594,7 @@ class SportDBApi:
         return all_matches
 
     def _extract_list(self, data) -> list:
-        """Extract list from any response format."""
+        """Extract list from any response."""
         if isinstance(data, list):
             return data
         elif isinstance(data, dict):
@@ -474,12 +611,10 @@ class SportDBApi:
         """Keep only todays matches."""
         today  = datetime.now(self.tz).date()
         result = []
-
         for m in matches:
             d = self._match_date(m)
             if d is None or d == today:
                 result.append(m)
-
         return result
 
     def _match_date(self, m: dict):
@@ -518,15 +653,12 @@ class SportDBApi:
         comp_name: str = "",
     ) -> list:
         """
-        Parse matches using CONFIRMED field names.
-
-        Confirmed from debug:
-        homeFirstName = home team
-        awayFirstName = away team
-        tournamentName = competition
-        startDateTimeUtc = kickoff ISO
-        eventStage = status
-        eventId = ID
+        Parse using CONFIRMED field names:
+        homeFirstName / awayFirstName
+        tournamentName
+        startDateTimeUtc
+        eventStage
+        eventId
         """
         out = []
 
@@ -534,7 +666,6 @@ class SportDBApi:
             if not isinstance(m, dict):
                 continue
             try:
-                # CONFIRMED field names
                 home = (
                     m.get("homeFirstName")
                     or m.get("homeName")
@@ -578,24 +709,26 @@ class SportDBApi:
                 )
 
                 out.append({
-                    "id":               str(match_id),
-                    "source":           "sportdb_api",
-                    "competition_name": str(competition),
+                    "id": str(match_id),
+                    "source": "sportdb_api",
+                    "competition_name": str(
+                        competition
+                    ),
                     "competition_code": "",
-                    "home_team":        home,
-                    "home_team_norm":   normalise(home),
-                    "home_team_id": (
-                        m.get("homeEventParticipantId")
+                    "home_team": home,
+                    "home_team_norm": normalise(home),
+                    "home_team_id": m.get(
+                        "homeEventParticipantId"
                     ),
-                    "away_team":        away,
-                    "away_team_norm":   normalise(away),
-                    "away_team_id": (
-                        m.get("awayEventParticipantId")
+                    "away_team": away,
+                    "away_team_norm": normalise(away),
+                    "away_team_id": m.get(
+                        "awayEventParticipantId"
                     ),
-                    "kickoff_uk":       kickoff,
-                    "kickoff_dt":       None,
-                    "status":           status,
-                    "match_links":      m.get("links", {}),
+                    "kickoff_uk": kickoff,
+                    "kickoff_dt": None,
+                    "status": status,
+                    "match_links": m.get("links", {}),
                 })
 
             except Exception:
@@ -654,10 +787,13 @@ class SportDBApi:
         """Test API works."""
         if not self.api_key:
             return False
-        data = self._get("/flashscore/football/live")
+        data = self._get(
+            "/flashscore/football/live"
+        )
         if data and isinstance(data, list):
             print(
-                f"SportDB: {len(data)} live matches"
+                f"SportDB connected: "
+                f"{len(data)} live matches"
             )
             return True
         return False
